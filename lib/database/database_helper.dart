@@ -70,9 +70,10 @@ class DatabaseHelper {
 
         path,
 
-        version: 1,
+        version: 2,
 
         onCreate: _createDB,
+        onUpgrade: _upgradeDB,
 
       );
 
@@ -81,6 +82,43 @@ class DatabaseHelper {
   }
 
 
+  Future<void> _upgradeDB(
+  Database db,
+  int oldVersion,
+  int newVersion,
+) async {
+
+  if (oldVersion < 2) {
+
+    await db.execute('''
+      CREATE TABLE receipts (
+        id TEXT PRIMARY KEY,
+        date TEXT NOT NULL,
+        shop TEXT NOT NULL,
+        amount REAL NOT NULL,
+        photoPath TEXT,
+        status TEXT NOT NULL,
+        comment TEXT
+      )
+    ''');
+
+
+    await db.execute('''
+      CREATE TABLE receipt_items (
+        id TEXT PRIMARY KEY,
+        receiptId TEXT NOT NULL,
+        name TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        unit TEXT NOT NULL,
+        price REAL NOT NULL,
+        total REAL NOT NULL,
+        FOREIGN KEY (receiptId) REFERENCES receipts(id)
+      )
+    ''');
+
+  }
+
+}
 
 
 

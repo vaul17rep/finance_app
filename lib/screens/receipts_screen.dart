@@ -1,9 +1,14 @@
-import 'package:flutter/material.dart';
-
-import '../repositories/receipt_repository.dart';
-import '../models/receipt.dart';
-import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../models/receipt.dart';
+import '../repositories/receipt_repository.dart';
+import '../services/openrouter_service.dart';
+import '../secrets.dart';
+import '../services/photo_storage_service.dart';
 
 
 class ReceiptsScreen extends StatefulWidget {
@@ -52,34 +57,159 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
   }
 
-  Future<void> addReceipt() async {
+Future<ImageSource?> selectImageSource() async {
 
-  final XFile? image =
-      await picker.pickImage(
-        source: ImageSource.camera,
+  return await showModalBottomSheet<ImageSource>(
+
+    context: context,
+
+    builder: (context) {
+
+      return SafeArea(
+
+        child: Wrap(
+
+          children: [
+
+            ListTile(
+
+              leading: const Icon(Icons.camera_alt),
+
+              title: const Text(
+                'Камера',
+              ),
+
+              onTap: () {
+
+                Navigator.pop(
+                  context,
+                  ImageSource.camera,
+                );
+
+              },
+
+            ),
+
+
+            ListTile(
+
+              leading: const Icon(Icons.photo),
+
+              title: const Text(
+                'Галерея',
+              ),
+
+              onTap: () {
+
+                Navigator.pop(
+                  context,
+                  ImageSource.gallery,
+                );
+
+              },
+
+            ),
+
+          ],
+
+        ),
+
+      );
+
+    },
+
+  );
+
+}
+
+Future<void> addReceipt() async {
+
+
+  final source =
+    await selectImageSource();
+
+
+if(source == null){
+  return;
+}
+
+
+final XFile? image =
+    await picker.pickImage(
+      source: source,
+    );
+
+
+  if(image == null){
+    return;
+  }
+
+  final savedPhotoPath =
+    await PhotoStorageService.savePhoto(
+      File(image.path),
+    );
+
+
+  final bytes =
+      await File(image.path).readAsBytes();
+
+
+  final base64 =
+    "data:image/jpeg;base64,${base64Encode(bytes)}";
+
+
+
+  final service =
+      OpenRouterService(
+        apiKey: Secrets.openRouterApiKey,
       );
 
 
-  if (image == null) {
-    return;
-  }
+  try {
+
+
+  final result =
+      await service.analyzeReceipt(base64);
+
+
+
+  print("МАГАЗИН:");
+  print(result.shop);
+
+
+  print("ТОВАРОВ:");
+  print(result.items.length);
+
 
 
   final receipt = Receipt(
 
-    id: 'CHK-${DateTime.now().millisecondsSinceEpoch}',
+    id:
+      'CHK-${DateTime.now().millisecondsSinceEpoch}',
 
-    date: DateTime.now(),
+    date:
+      result.date ?? DateTime.now(),
 
-    shop: 'Не определён',
+    time:
+      result.time, 
 
-    amount: 0,
+    shop:
+      result.shop,
 
-    photoPath: image.path,
+    amount:
+      result.items.fold(
+        0,
+        (sum, item) => sum + item.total,
+      ),
 
-    status: 'NEW',
+    photoPath:
+      savedPhotoPath,
 
-    comment: 'Ожидает обработки',
+    status:
+      'DONE',
+
+    comment:
+      result.paymentType,
 
   );
 
@@ -88,6 +218,16 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
 
   await loadReceipts();
+
+
+}
+catch(e){
+
+  print(
+    "ОШИБКА: $e",
+  );
+
+}
 
 
 }

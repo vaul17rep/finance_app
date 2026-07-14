@@ -46,3 +46,5 @@ app.*.map.json
 
 *.db
 *.sqlite
+
+lib/secrets.dart

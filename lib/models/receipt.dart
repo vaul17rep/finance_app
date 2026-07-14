@@ -4,6 +4,8 @@ class Receipt {
 
   final DateTime date;
 
+  final String? time;
+
   final String shop;
 
   final double amount;
@@ -20,6 +22,8 @@ class Receipt {
     required this.id,
 
     required this.date,
+
+    required this.time,
 
     required this.shop,
 

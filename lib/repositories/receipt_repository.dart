@@ -43,19 +43,31 @@ class ReceiptRepository {
     );
 
 
-    return data.map((json) {
+    return data.map<Receipt>((json) {
 
-      return Receipt(
-        id: json['id'].toString(),
-        date: DateTime.parse(json['date'].toString()),
-        shop: json['shop'].toString(),
-        amount: (json['amount'] as num).toDouble(),
-        photoPath: json['photoPath']?.toString(),
-        status: json['status'].toString(),
-        comment: json['comment']?.toString(),
-      );
+  return Receipt(
 
-    }).toList();
+    id: json['id'].toString(),
+
+    date: DateTime.parse(
+      json['date'].toString(),
+    ),
+
+    time: json['time']?.toString(),
+
+    shop: json['shop'].toString(),
+
+    amount: (json['amount'] as num).toDouble(),
+
+    photoPath: json['photoPath']?.toString(),
+
+    status: json['status'].toString(),
+
+    comment: json['comment']?.toString(),
+
+  );
+
+}).toList();
 
   }
 

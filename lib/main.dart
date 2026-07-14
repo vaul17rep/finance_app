@@ -1,17 +1,17 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
 import 'database/database_helper.dart';
 import 'models/operation.dart';
 import 'screens/add_operation_screen.dart';
+import 'screens/receipts_screen.dart';
 
 
 void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
+await DatabaseHelper.instance.testDatabase();
 
   if (Platform.isWindows) {
 
@@ -271,12 +271,40 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 32),
 
 
+ElevatedButton.icon(
+
+  onPressed: () {
+
+    Navigator.push(
+
+      context,
+
+      MaterialPageRoute(
+
+        builder: (context) =>
+            const ReceiptsScreen(),
+
+      ),
+
+    );
+
+  },
+
+  icon: const Icon(Icons.receipt),
+
+  label: const Text(
+    'Чеки',
+  ),
+
+),
 
 
+const SizedBox(height: 32),
 
-            const Text(
 
-              'Последние операции',
+const Text(
+
+  'Последние операции',
 
               style: TextStyle(
 

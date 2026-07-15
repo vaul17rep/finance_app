@@ -4,6 +4,9 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../models/receipt.dart';
+import '../models/receipt_item.dart';
+
 
 class DatabaseHelper {
 
@@ -56,10 +59,16 @@ class DatabaseHelper {
 
         options: OpenDatabaseOptions(
 
-          version: 3,
+          version: 4,
 
           onCreate: _createDB,
           onUpgrade: _upgradeDB,
+
+          onOpen: (db) async {
+    await db.execute(
+      'PRAGMA foreign_keys = ON',
+    );
+  },
 
         ),
 
@@ -67,19 +76,23 @@ class DatabaseHelper {
 
     } else {
 
-      return await openDatabase(
+  return await openDatabase(
 
-        path,
+    path,
 
-        version: 3,
+    version: 4,
 
-        onCreate: _createDB,
-        onUpgrade: _upgradeDB,
+    onCreate: _createDB,  
+    onUpgrade: _upgradeDB,
 
+    onOpen: (db) async {
+      await db.execute(
+        'PRAGMA foreign_keys = ON',
       );
+    },
 
-    }
-
+  );
+  };
   }
 
 
@@ -100,6 +113,7 @@ class DatabaseHelper {
           id TEXT PRIMARY KEY,
           date TEXT NOT NULL,
           shop TEXT NOT NULL,
+          paymentType TEXT,
           amount REAL NOT NULL,
           photoPath TEXT,
           status TEXT NOT NULL,
@@ -209,7 +223,11 @@ class DatabaseHelper {
 
         date TEXT NOT NULL,
 
+        time TEXT,
+
         shop TEXT NOT NULL,
+
+        paymentType TEXT,
 
         amount REAL NOT NULL,
 
@@ -243,7 +261,15 @@ class DatabaseHelper {
 
         price REAL NOT NULL,
 
-        total REAL NOT NULL
+        total REAL NOT NULL,
+
+        priceBeforeDiscount REAL,
+
+        comment TEXT,
+
+        FOREIGN KEY(receiptId) 
+          REFERENCES receipts(id)
+          ON DELETE CASCADE
 
       )
 
@@ -326,6 +352,152 @@ class DatabaseHelper {
 
 
   }
+    Future<void> insertReceipt(
+      Receipt receipt,
+  ) async {
 
+    final db = await database;
+
+
+    await db.insert(
+      'receipts',
+      receipt.toMap(),
+    );
+
+  }
+
+    Future<List<Receipt>> getReceipts() async {
+
+    final db = await database;
+
+
+    final data = await db.query(
+      'receipts',
+      orderBy: 'date DESC',
+    );
+
+
+    return data
+        .map(
+          (json) => Receipt.fromMap(json),
+        )
+        .toList();
+
+  }
+
+    Future<void> insertReceiptItem(
+      ReceiptItem item,
+  ) async {
+
+    final db = await database;
+
+
+    await db.insert(
+      'receipt_items',
+      item.toMap(),
+    );
+
+  }
+
+    Future<void> insertReceiptItems(
+      List<ReceiptItem> items,
+  ) async {
+
+    final db = await database;
+
+
+    final batch = db.batch();
+
+
+    for (final item in items) {
+
+      batch.insert(
+        'receipt_items',
+        item.toMap(),
+      );
+
+    }
+
+
+    await batch.commit();
+
+  }
+
+    Future<List<ReceiptItem>> getReceiptItems(
+      String receiptId,
+  ) async {
+
+    final db = await database;
+
+
+    final data = await db.query(
+      'receipt_items',
+      where: 'receiptId = ?',
+      whereArgs: [
+        receiptId,
+      ],
+    );
+
+
+    return data
+        .map(
+          (json) => ReceiptItem.fromMap(json),
+        )
+        .toList();
+
+  }
+
+    Future<void> deleteReceipt(
+      String receiptId,
+  ) async {
+
+    final db = await database;
+
+
+    await db.delete(
+      'receipts',
+      where: 'id = ?',
+      whereArgs: [
+        receiptId,
+      ],
+    );
+
+  }
+
+    Future<void> insertReceiptWithItems(
+      Receipt receipt,
+      List<ReceiptItem> items,
+  ) async {
+
+
+    final db = await database;
+
+
+    await db.transaction((txn) async {
+
+
+      await txn.insert(
+        'receipts',
+        receipt.toMap(),
+      );
+
+
+
+      for (final item in items) {
+
+
+        await txn.insert(
+          'receipt_items',
+          item.toMap(),
+        );
+
+
+      }
+
+
+    });
+
+
+  }
 
 }

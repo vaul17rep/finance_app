@@ -49,6 +49,7 @@ class DatabaseHelper {
     final path =
         join(dbPath, fileName);
 
+  debugPrint(path);
 
 
     if (Platform.isWindows) {
@@ -80,7 +81,7 @@ class DatabaseHelper {
 
     path,
 
-    version: 4,
+    version: 5,
 
     onCreate: _createDB,  
     onUpgrade: _upgradeDB,
@@ -171,6 +172,15 @@ class DatabaseHelper {
 
     }
 
+
+    if (oldVersion < 5) {
+
+  await db.execute('''
+    ALTER TABLE receipt_items
+    ADD COLUMN category TEXT
+  ''');
+
+}
 
   }
 
@@ -337,21 +347,17 @@ class DatabaseHelper {
 
   Future<void> testDatabase() async {
 
+  final db = await database;
 
-    final db = await database;
+  final result = await db.rawQuery(
+    "PRAGMA table_info(receipt_items)",
+  );
 
+  debugPrint("СТРУКТУРА receipt_items:");
 
-    final result = await db.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table'",
-    );
+  debugPrint(result.toString());
 
-
-    debugPrint("Таблицы в базе:");
-
-    debugPrint(result.toString());
-
-
-  }
+}
     Future<void> insertReceipt(
       Receipt receipt,
   ) async {

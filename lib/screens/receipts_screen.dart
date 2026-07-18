@@ -9,6 +9,12 @@ import '../repositories/receipt_repository.dart';
 import '../services/openrouter_service.dart';
 import '../secrets.dart';
 import '../services/photo_storage_service.dart';
+import '../models/receipt_item.dart';
+import 'receipt_details_screen.dart';
+
+import '../models/operation.dart';
+import '../repositories/operation_repository.dart';
+
 
 
 class ReceiptsScreen extends StatefulWidget {
@@ -29,9 +35,14 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
   final ReceiptRepository repository =
       ReceiptRepository();
 
+  final OperationRepository operationRepository =
+      OperationRepository();
+
   final ImagePicker picker = ImagePicker();
 
   List<Receipt> receipts = [];
+
+  int loadingCount = 0;
 
 
   @override
@@ -124,6 +135,10 @@ Future<ImageSource?> selectImageSource() async {
 
 Future<void> addReceipt() async {
 
+  setState(() {
+  loadingCount++;
+});
+
 
   final source =
     await selectImageSource();
@@ -197,10 +212,14 @@ final XFile? image =
       result.shop,
 
     amount:
-      result.items.fold(
-        0,
-        (sum, item) => sum + item.total,
-      ),
+  double.parse(
+    result.items
+        .fold(
+          0.0,
+          (sum, item) => sum + item.total,
+        )
+        .toStringAsFixed(2),
+  ),
 
     photoPath:
       savedPhotoPath,
@@ -213,11 +232,83 @@ final XFile? image =
 
   );
 
+  
+  final items = result.items.map((item) {
 
-  await repository.insertReceipt(receipt);
+  return ReceiptItem(
+
+    id:
+      'ITEM-${DateTime.now().millisecondsSinceEpoch}-${item.name}',
+
+    receiptId:
+      receipt.id,
+
+    name:
+      item.name,
+
+    category:
+      item.category,
+
+    quantity:
+      item.quantity,
+
+    unit:
+      item.unit,
+
+    price:
+      item.price,
+
+    total:
+      item.total,
+
+    priceBeforeDiscount:
+      item.priceBeforeDiscount,
+
+    comment:
+      item.comment,
+
+  );
+
+}).toList();
+
+  await repository.insertReceiptWithItems(
+  receipt,
+  items,
+);
 
 
-  await loadReceipts();
+final operation = Operation(
+
+  id:
+      'OP-${DateTime.now().millisecondsSinceEpoch}',
+
+  type:
+      'expense',
+
+  amount:
+      receipt.amount,
+
+  comment:
+      receipt.comment ?? '',
+
+  date:
+      receipt.date,
+
+  shop:
+      receipt.shop,
+
+  receiptId:
+      receipt.id,
+
+);
+
+
+await operationRepository.insertOperation(
+  operation,
+);
+
+
+await loadReceipts();
 
 
 }
@@ -226,6 +317,13 @@ catch(e){
   print(
     "ОШИБКА: $e",
   );
+
+}
+finally {
+
+  setState(() {
+  loadingCount--;
+});
 
 }
 
@@ -261,17 +359,39 @@ catch(e){
 
                 return ListTile(
 
-                  title: Text(receipt.shop),
+  title: Text(receipt.shop),
 
-                  subtitle: Text(
-                    receipt.date.toString(),
-                  ),
+  subtitle: Text(
+    receipt.date.toString(),
+  ),
 
-                  trailing: Text(
-                    '${receipt.amount} ₽',
-                  ),
+  trailing: Text(
+    '${receipt.amount.toStringAsFixed(2)} ₽',
+    style: const TextStyle(
+      fontWeight: FontWeight.bold,
+    ),
+  ),
 
-                );
+  onTap: () {
+
+    Navigator.push(
+
+      context,
+
+      MaterialPageRoute(
+
+        builder: (context) =>
+            ReceiptDetailsScreen(
+              receipt: receipt,
+            ),
+
+      ),
+
+    );
+
+  },
+
+);
 
               },
 
@@ -282,7 +402,13 @@ catch(e){
 
   onPressed: addReceipt,
 
-  child: const Icon(Icons.add),
+  child: loadingCount > 0
+
+    ? const CircularProgressIndicator(
+        color: Colors.white,
+      )
+
+    : const Icon(Icons.add),
 
 ),
 

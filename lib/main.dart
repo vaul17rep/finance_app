@@ -5,13 +5,13 @@ import 'database/database_helper.dart';
 import 'models/operation.dart';
 import 'screens/add_operation_screen.dart';
 import 'screens/receipts_screen.dart';
+import 'screens/operations_screen.dart';
 
 
 void main() async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
-await DatabaseHelper.instance.testDatabase();
 
   if (Platform.isWindows) {
 
@@ -294,6 +294,36 @@ ElevatedButton.icon(
 
   label: const Text(
     'Чеки',
+  ),
+
+),
+
+const SizedBox(height: 16),
+
+
+ElevatedButton.icon(
+
+  onPressed: () {
+
+    Navigator.push(
+
+      context,
+
+      MaterialPageRoute(
+
+        builder: (context) =>
+            const OperationsScreen(),
+
+      ),
+
+    );
+
+  },
+
+  icon: const Icon(Icons.list),
+
+  label: const Text(
+    'Операции',
   ),
 
 ),

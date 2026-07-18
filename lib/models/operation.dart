@@ -10,6 +10,14 @@ class Operation {
 
   final DateTime date;
 
+  final String? shop;
+
+  final String? article;
+
+  final String? category;
+
+  final String? receiptId;
+
 
   Operation({
 
@@ -22,6 +30,14 @@ class Operation {
     required this.comment,
 
     required this.date,
+
+    this.shop,
+
+    this.article,
+
+    this.category,
+
+    this.receiptId,
 
   });
 

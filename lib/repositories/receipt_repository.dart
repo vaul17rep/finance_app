@@ -30,6 +30,28 @@ class ReceiptRepository {
   }
 
   // ============================================
+  // Обновление товара чека
+  // ============================================
+
+  Future<void> updateReceiptItem(ReceiptItem item) async {
+    await _dbHelper.updateReceiptItem(item);
+  }
+
+  Future<void> recalculateReceiptAmount(String receiptId) async {
+    final amount = await _dbHelper.recalculateReceiptAmount(receiptId);
+
+    await _dbHelper.updateOperationAmount(receiptId, amount);
+  }
+
+  // ============================================
+  // Обновление чека
+  // ============================================
+
+  Future<void> updateReceipt(Receipt receipt) async {
+    await _dbHelper.updateReceipt(receipt);
+  }
+
+  // ============================================
   // Добавление списка товаров
   // ============================================
 
@@ -51,6 +73,14 @@ class ReceiptRepository {
 
   Future<void> deleteReceipt(String receiptId) async {
     await _dbHelper.deleteReceipt(receiptId);
+  }
+
+  Future<void> updateReceiptAmount(String receiptId, double amount) async {
+    await _dbHelper.updateOperationAmount(receiptId, amount);
+  }
+
+  Future<Receipt?> getReceiptById(String id) async {
+    return await _dbHelper.getReceiptById(id);
   }
 
   Future<void> insertReceiptWithItems(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/receipt.dart';
 import '../models/receipt_item.dart';
 import '../repositories/receipt_repository.dart';
+import 'edit_receipt_screen.dart';
 
 class ReceiptDetailsScreen extends StatefulWidget {
   final Receipt receipt;
@@ -18,30 +19,58 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
 
   List<ReceiptItem> items = [];
 
+  late Receipt currentReceipt;
+
   @override
   void initState() {
     super.initState();
 
-    loadItems();
+    currentReceipt = widget.receipt;
+
+    loadData();
   }
 
-  Future<void> loadItems() async {
-    final result = await repository.getReceiptItems(widget.receipt.id);
+  Future<void> loadData() async {
+    final receipt = await repository.getReceiptById(currentReceipt.id);
+
+    final receiptItems = await repository.getReceiptItems(currentReceipt.id);
 
     setState(() {
-      items = result;
+      if (receipt != null) {
+        currentReceipt = receipt;
+      }
+
+      items = receiptItems;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final receipt = widget.receipt;
+    final receipt = currentReceipt;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(receipt.shop),
 
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+
+            onPressed: () async {
+              final updatedReceipt = await Navigator.push(
+                context,
+
+                MaterialPageRoute(
+                  builder: (context) =>
+                      EditReceiptScreen(receipt: currentReceipt),
+                ),
+              );
+
+              if (updatedReceipt != null) {
+                await loadData();
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete),
 
@@ -88,61 +117,81 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
         ],
       ),
 
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: RefreshIndicator(
+        onRefresh: loadData,
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
 
-          children: [
-            Text(
-              receipt.shop,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
 
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Text(
+                  receipt.shop,
+
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text(receipt.date.toString()),
+
+                const SizedBox(height: 16),
+
+                Text(
+                  'Всего: ${receipt.amount.toStringAsFixed(2)} ₽',
+
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                const Text(
+                  'Товары:',
+
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 10),
+
+                SizedBox(
+                  height: 300,
+
+                  child: items.isEmpty
+                      ? const Center(child: Text('Товаров нет'))
+                      : ListView.builder(
+                          itemCount: items.length,
+
+                          itemBuilder: (context, index) {
+                            final item = items[index];
+
+                            return ListTile(
+                              title: Text(item.name),
+
+                              subtitle: Text(
+                                '${item.quantity} ${item.unit ?? ''}',
+                              ),
+
+                              trailing: Text(
+                                '${item.total.toStringAsFixed(2)} ₽',
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-
-            const SizedBox(height: 8),
-
-            Text(receipt.date.toString()),
-
-            const SizedBox(height: 16),
-
-            Text(
-              'Всего: ${receipt.amount.toStringAsFixed(2)} ₽',
-
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 20),
-
-            const Text(
-              'Товары:',
-
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-
-            const SizedBox(height: 10),
-
-            Expanded(
-              child: items.isEmpty
-                  ? const Center(child: Text('Товаров нет'))
-                  : ListView.builder(
-                      itemCount: items.length,
-
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-
-                        return ListTile(
-                          title: Text(item.name),
-
-                          subtitle: Text('${item.quantity} ${item.unit ?? ''}'),
-
-                          trailing: Text('${item.total.toStringAsFixed(2)} ₽'),
-                        );
-                      },
-                    ),
-            ),
-          ],
+          ),
         ),
       ),
     );

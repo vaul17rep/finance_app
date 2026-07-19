@@ -34,6 +34,21 @@ class OperationRepository {
     }).toList();
   }
 
+  // ============================================
+  // Обновление операции связанной с чеком
+  // ============================================
+
+  Future<void> updateOperationByReceiptId(Operation operation) async {
+    await _dbHelper.updateOperationByReceiptId(
+      operation.receiptId!,
+      operation.amount,
+      operation.shop ?? '',
+      operation.date,
+    );
+  }
+
+
+
   Future<void> insertOperation(Operation operation) async {
     await _dbHelper.insertOperation({
       'id': operation.id,

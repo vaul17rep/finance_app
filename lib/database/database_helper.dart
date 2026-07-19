@@ -229,6 +229,30 @@ class DatabaseHelper {
     );
   }
 
+  // ============================================
+  // Обновление операции по receiptId
+  // ============================================
+  Future<void> updateOperationByReceiptId(
+    String receiptId,
+    double amount,
+    String shop,
+    DateTime date,
+  ) async {
+    final db = await database;
+
+    await db.update(
+      'operations',
+      {
+        'amount': amount,
+        'comment': shop,
+        'shop': shop,
+        'date': date.toIso8601String(),
+      },
+      where: 'receiptId = ?',
+      whereArgs: [receiptId],
+    );
+  }
+
   Future<void> testDatabase() async {
     final db = await database;
 
@@ -237,6 +261,29 @@ class DatabaseHelper {
     debugPrint("СТРУКТУРА receipt_items:");
 
     debugPrint(result.toString());
+  }
+
+  Future<double> recalculateReceiptAmount(String receiptId) async {
+    final db = await database;
+
+    final result = await db.rawQuery(
+      '''
+    SELECT SUM(total) as total
+    FROM receipt_items
+    WHERE receiptId = ?
+    ''',
+      [receiptId],
+    );
+
+    final total = (result.first['total'] as num?)?.toDouble() ?? 0;
+
+    await db.update(
+      'receipts',
+      {'amount': total},
+      where: 'id = ?',
+      whereArgs: [receiptId],
+    );
+    return total;
   }
 
   Future<void> insertReceipt(Receipt receipt) async {
@@ -251,6 +298,47 @@ class DatabaseHelper {
     final data = await db.query('receipts', orderBy: 'date DESC');
 
     return data.map((json) => Receipt.fromMap(json)).toList();
+  }
+
+  Future<void> updateOperationAmount(String receiptId, double amount) async {
+    final db = await database;
+
+    await db.update(
+      'operations',
+      {'amount': amount},
+      where: 'receiptId = ?',
+      whereArgs: [receiptId],
+    );
+  }
+
+  Future<Receipt?> getReceiptById(String id) async {
+    final db = await database;
+
+    final result = await db.query('receipts', where: 'id = ?', whereArgs: [id]);
+
+    if (result.isEmpty) {
+      return null;
+    }
+
+    return Receipt.fromMap(result.first);
+  }
+
+  // ============================================
+  // Обновление чека
+  // ============================================
+
+  Future<void> updateReceipt(Receipt receipt) async {
+    final db = await database;
+
+    await db.update(
+      'receipts',
+
+      receipt.toMap(),
+
+      where: 'id = ?',
+
+      whereArgs: [receipt.id],
+    );
   }
 
   Future<void> insertReceiptItem(ReceiptItem item) async {
@@ -281,6 +369,21 @@ class DatabaseHelper {
     );
 
     return data.map((json) => ReceiptItem.fromMap(json)).toList();
+  }
+
+  // ============================================
+  // Обновление товара чека
+  // ============================================
+
+  Future<void> updateReceiptItem(ReceiptItem item) async {
+    final db = await database;
+
+    await db.update(
+      'receipt_items',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
   }
 
   Future<void> deleteReceipt(String receiptId) async {

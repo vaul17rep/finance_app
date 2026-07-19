@@ -46,9 +46,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       operations = loaded;
-
       financialState = state;
     });
+  }
+
+  Future<void> refresh() async {
+    await loadOperations();
   }
 
   @override
@@ -56,11 +59,11 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Мои финансы')),
 
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      body: RefreshIndicator(
+        onRefresh: refresh,
 
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
 
           children: [
             const Text('Баланс', style: TextStyle(fontSize: 18)),
@@ -76,14 +79,16 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 32),
 
             ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
 
                   MaterialPageRoute(
                     builder: (context) => const ReceiptsScreen(),
                   ),
                 );
+
+                await loadOperations();
               },
 
               icon: const Icon(Icons.receipt),
@@ -94,14 +99,16 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 16),
 
             ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                await Navigator.push(
                   context,
 
                   MaterialPageRoute(
                     builder: (context) => const OperationsScreen(),
                   ),
                 );
+
+                await loadOperations();
               },
 
               icon: const Icon(Icons.list),
@@ -119,32 +126,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 16),
 
-            Expanded(
-              child: operations.isEmpty
-                  ? const Center(child: Text('Операций пока нет'))
-                  : ListView.builder(
-                      itemCount: operations.length,
+            if (operations.isEmpty)
+              const Center(child: Text('Операций пока нет'))
+            else
+              ...operations.map(
+                (op) => ListTile(
+                  title: Text(
+                    op.comment.isEmpty ? op.type.toString() : op.comment,
+                  ),
 
-                      itemBuilder: (context, index) {
-                        final op = operations[index];
+                  subtitle: Text(op.type.toString()),
 
-                        return ListTile(
-                          title: Text(
-                            op.comment.isEmpty
-                                ? op.type.toString()
-                                : op.comment,
-                          ),
-
-                          subtitle: Text(op.type.toString()),
-
-                          trailing: Text(
-                            '${op.type == OperationType.expense ? "-" : "+"}'
-                            '${op.amount.toStringAsFixed(0)} ₽',
-                          ),
-                        );
-                      },
-                    ),
-            ),
+                  trailing: Text(
+                    '${op.type == OperationType.expense ? "-" : "+"}'
+                    '${op.amount.toStringAsFixed(0)} ₽',
+                  ),
+                ),
+              ),
           ],
         ),
       ),

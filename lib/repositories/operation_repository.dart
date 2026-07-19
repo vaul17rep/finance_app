@@ -55,4 +55,8 @@ class OperationRepository {
       'receiptId': operation.receiptId,
     });
   }
+
+  Future<void> deleteByReceiptId(String receiptId) async {
+    await _dbHelper.deleteOperationByReceiptId(receiptId);
+  }
 }

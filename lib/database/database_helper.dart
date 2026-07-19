@@ -219,6 +219,16 @@ class DatabaseHelper {
     return await db.query('operations', orderBy: 'date DESC');
   }
 
+  Future<void> deleteOperationByReceiptId(String receiptId) async {
+    final db = await database;
+
+    await db.delete(
+      'operations',
+      where: 'receiptId = ?',
+      whereArgs: [receiptId],
+    );
+  }
+
   Future<void> testDatabase() async {
     final db = await database;
 
@@ -276,7 +286,21 @@ class DatabaseHelper {
   Future<void> deleteReceipt(String receiptId) async {
     final db = await database;
 
-    await db.delete('receipts', where: 'id = ?', whereArgs: [receiptId]);
+    await db.transaction((txn) async {
+      await txn.delete(
+        'operations',
+        where: 'receiptId = ?',
+        whereArgs: [receiptId],
+      );
+
+      await txn.delete(
+        'receipt_items',
+        where: 'receiptId = ?',
+        whereArgs: [receiptId],
+      );
+
+      await txn.delete('receipts', where: 'id = ?', whereArgs: [receiptId]);
+    });
   }
 
   Future<void> insertReceiptWithItems(

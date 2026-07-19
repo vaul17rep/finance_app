@@ -192,7 +192,7 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
         amount: receipt.amount,
 
-        comment: receipt.comment ?? '',
+        comment: receipt.shop,
 
         date: receipt.date,
 
@@ -218,37 +218,91 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Чеки')),
 
-      body: receipts.isEmpty
-          ? const Center(child: Text('Чеков пока нет'))
-          : ListView.builder(
-              itemCount: receipts.length,
+      body: RefreshIndicator(
+        onRefresh: loadReceipts,
 
-              itemBuilder: (context, index) {
-                final receipt = receipts[index];
+        child: receipts.isEmpty
+            ? ListView(
+                children: const [
+                  SizedBox(height: 300),
+                  Center(child: Text('Чеков пока нет')),
+                ],
+              )
+            : ListView.builder(
+                itemCount: receipts.length,
 
-                return ListTile(
-                  title: Text(receipt.shop),
+                itemBuilder: (context, index) {
+                  final receipt = receipts[index];
 
-                  subtitle: Text(receipt.date.toString()),
+                  return ListTile(
+                    title: Text(receipt.shop),
 
-                  trailing: Text(
-                    '${receipt.amount.toStringAsFixed(2)} ₽',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
+                    subtitle: Text(receipt.date.toString()),
 
-                  onTap: () {
-                    Navigator.push(
-                      context,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
 
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            ReceiptDetailsScreen(receipt: receipt),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                      children: [
+                        Text('${receipt.amount.toStringAsFixed(2)} ₽'),
+
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+
+                          onPressed: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+
+                              builder: (context) {
+                                return AlertDialog(
+                                  title: const Text('Удалить чек?'),
+
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context, false);
+                                      },
+
+                                      child: const Text('Отмена'),
+                                    ),
+
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context, true);
+                                      },
+
+                                      child: const Text('Удалить'),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+
+                            if (confirm == true) {
+                              await repository.deleteReceipt(receipt.id);
+
+                              await loadReceipts();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ReceiptDetailsScreen(receipt: receipt),
+                        ),
+                      );
+
+                      await loadReceipts();
+                    },
+                  );
+                },
+              ),
+      ),
 
       floatingActionButton: FloatingActionButton(
         onPressed: addReceipt,

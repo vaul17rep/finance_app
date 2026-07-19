@@ -60,7 +60,7 @@ class DatabaseHelper {
 
         options: OpenDatabaseOptions(
 
-          version: 4,
+          version: 5,
 
           onCreate: _createDB,
           onUpgrade: _upgradeDB,

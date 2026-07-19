@@ -1,8 +1,11 @@
+import 'operation_type.dart';
+
+
 class Operation {
 
   final String id;
 
-  final String type;
+  final dynamic type;
 
   final double amount;
 

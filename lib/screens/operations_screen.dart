@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/operation.dart';
 import '../repositories/operation_repository.dart';
+import '../models/operation_type.dart';
 
 
 class OperationsScreen extends StatefulWidget {
@@ -99,8 +100,9 @@ class _OperationsScreenState
 
 
                   trailing: Text(
-                    '-${operation.amount.toStringAsFixed(2)} ₽',
-                  ),
+                  '${operation.type == OperationType.expense ? "-" : "+"}'
+                  '${operation.amount.toStringAsFixed(2)} ₽',
+                ),
 
                 );
 

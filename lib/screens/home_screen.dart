@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../database/database_helper.dart';
 import '../models/operation.dart';
 
 import 'add_operation_screen.dart';
@@ -10,6 +9,7 @@ import 'operations_screen.dart';
 import '../domain/services/financial_calculator.dart';
 import '../domain/entities/financial_state.dart';
 import '../repositories/operation_repository.dart';
+import '../models/operation_type.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -257,7 +257,7 @@ FinancialState? financialState;
 
                             op.comment.isEmpty
 
-                                ? op.type
+                                ? op.type.name
 
                                 : op.comment,
 
@@ -265,14 +265,14 @@ FinancialState? financialState;
 
 
                           subtitle: Text(
-                            op.type,
+                            op.type.name,
                           ),
 
 
 
                           trailing: Text(
 
-                            '${op.type == "Расход" ? "-" : "+"}'
+                            '${op.type == OperationType.expense ? "-" : "+"}'
                             '${op.amount.toStringAsFixed(0)} ₽',
 
                           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/operation.dart';
+import '../models/operation_type.dart';
 
 class AddOperationScreen extends StatefulWidget {
   const AddOperationScreen({super.key});
@@ -15,7 +16,7 @@ class _AddOperationScreenState extends State<AddOperationScreen> {
   final amountController = TextEditingController();
   final commentController = TextEditingController();
 
-  String type = 'Расход';
+  OperationType type = OperationType.expense;
 
 
   void saveOperation() {
@@ -92,38 +93,37 @@ class _AddOperationScreenState extends State<AddOperationScreen> {
             const SizedBox(height: 16),
 
 
-            DropdownButton<String>(
+            DropdownButton<OperationType>(
 
-              value: type,
+            value: type,
 
-              items: const [
+            items: const [
 
-                DropdownMenuItem(
-                  value: 'Расход',
-                  child: Text('Расход'),
-                ),
+              DropdownMenuItem(
+                value: OperationType.expense,
+                child: Text('Расход'),
+              ),
 
-                DropdownMenuItem(
-                  value: 'Доход',
-                  child: Text('Доход'),
-                ),
+              DropdownMenuItem(
+                value: OperationType.income,
+                child: Text('Доход'),
+              ),
 
-              ],
+            ],
 
+            onChanged: (value) {
 
-              onChanged: (value) {
+              if (value != null) {
 
-                if (value != null) {
+                setState(() {
+                  type = value;
+                });
 
-                  setState(() {
-                    type = value;
-                  });
+              }
 
-                }
+            },
 
-              },
-
-            ),
+          ),
 
 
             const SizedBox(height: 16),

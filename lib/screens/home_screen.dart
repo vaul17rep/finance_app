@@ -1,364 +1,177 @@
 import 'package:flutter/material.dart';
 
 import '../models/operation.dart';
+import '../models/operation_type.dart';
+
+import '../domain/services/financial_calculator.dart';
+import '../domain/services/financial_service.dart';
+import '../domain/entities/financial_state.dart';
+
+import '../repositories/operation_repository.dart';
 
 import 'add_operation_screen.dart';
 import 'receipts_screen.dart';
 import 'operations_screen.dart';
 
-import '../domain/services/financial_calculator.dart';
-import '../domain/entities/financial_state.dart';
-import '../repositories/operation_repository.dart';
-import '../models/operation_type.dart';
-
-
 class HomeScreen extends StatefulWidget {
-
   const HomeScreen({super.key});
-
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
-
 }
 
-
 class _HomeScreenState extends State<HomeScreen> {
-
-
   List<Operation> operations = [];
-
-  final FinancialCalculator _calculator = FinancialCalculator();
-
-FinancialState? financialState;
 
   final OperationRepository _repository = OperationRepository();
 
+  late final FinancialService _financialService = FinancialService(
+    _repository,
+    FinancialCalculator(),
+  );
+
+  FinancialState? financialState;
 
   @override
   void initState() {
-
     super.initState();
 
     loadOperations();
-
   }
 
-
-
   Future<void> loadOperations() async {
+    final loaded = await _repository.getOperations();
 
-  final loaded = await _repository.getOperations();
+    final state = await _financialService.getState();
 
-  debugPrint('Операций загружено: ${loaded.length}');
+    setState(() {
+      operations = loaded;
 
-  setState(() {
-
-    operations = loaded;
-
-    financialState = _calculator.calculate(loaded);
-
-  });
-
-}
-
-
-
-
+      financialState = state;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-
-
     return Scaffold(
-
-
-      appBar: AppBar(
-
-        title: const Text(
-          'Мои финансы',
-        ),
-
-      ),
-
-
+      appBar: AppBar(title: const Text('Мои финансы')),
 
       body: Padding(
-
         padding: const EdgeInsets.all(16),
 
-
         child: Column(
-
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
-
+          crossAxisAlignment: CrossAxisAlignment.start,
 
           children: [
-
-
-            const Text(
-
-              'Баланс',
-
-              style: TextStyle(
-                fontSize: 18,
-              ),
-
-            ),
-
-
+            const Text('Баланс', style: TextStyle(fontSize: 18)),
 
             const SizedBox(height: 8),
 
-
-
             Text(
-
               '${(financialState?.balance ?? 0).toStringAsFixed(0)} ₽',
 
-                style: const TextStyle(
-
-                fontSize: 36,
-
-                fontWeight:
-                    FontWeight.bold,
-
-              )
-
+              style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
             ),
-
-
 
             const SizedBox(height: 32),
 
-
-
             ElevatedButton.icon(
-
               onPressed: () {
-
                 Navigator.push(
-
                   context,
 
                   MaterialPageRoute(
-
-                    builder: (context) =>
-                        const ReceiptsScreen(),
-
+                    builder: (context) => const ReceiptsScreen(),
                   ),
-
                 );
-
               },
 
               icon: const Icon(Icons.receipt),
 
-              label: const Text(
-                'Чеки',
-              ),
-
+              label: const Text('Чеки'),
             ),
-
-
 
             const SizedBox(height: 16),
 
-
-
             ElevatedButton.icon(
-
               onPressed: () {
-
                 Navigator.push(
-
                   context,
 
                   MaterialPageRoute(
-
-                    builder: (context) =>
-                        const OperationsScreen(),
-
+                    builder: (context) => const OperationsScreen(),
                   ),
-
                 );
-
               },
 
               icon: const Icon(Icons.list),
 
-              label: const Text(
-                'Операции',
-              ),
-
+              label: const Text('Операции'),
             ),
-
-
 
             const SizedBox(height: 32),
 
-
-
             const Text(
-
               'Последние операции',
 
-              style: TextStyle(
-
-                fontSize: 20,
-
-                fontWeight:
-                    FontWeight.bold,
-
-              ),
-
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
-
-
 
             const SizedBox(height: 16),
 
-
-
             Expanded(
-
-
               child: operations.isEmpty
-
-
-                  ? const Center(
-
-                      child: Text(
-                        'Операций пока нет',
-                      ),
-
-                    )
-
-
+                  ? const Center(child: Text('Операций пока нет'))
                   : ListView.builder(
+                      itemCount: operations.length,
 
-                      itemCount:
-                          operations.length,
-
-
-                      itemBuilder:
-                          (context, index) {
-
-
-                        final op =
-                            operations[index];
-
+                      itemBuilder: (context, index) {
+                        final op = operations[index];
 
                         return ListTile(
-
-
                           title: Text(
-
                             op.comment.isEmpty
-
-                                ? op.type.name
-
+                                ? op.type.toString()
                                 : op.comment,
-
                           ),
 
-
-                          subtitle: Text(
-                            op.type.name,
-                          ),
-
-
+                          subtitle: Text(op.type.toString()),
 
                           trailing: Text(
-
                             '${op.type == OperationType.expense ? "-" : "+"}'
                             '${op.amount.toStringAsFixed(0)} ₽',
-
                           ),
-
-
                         );
-
                       },
-
                     ),
-
             ),
-
           ],
-
         ),
-
       ),
 
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.push<Operation>(
+            context,
 
+            MaterialPageRoute(builder: (context) => const AddOperationScreen()),
+          );
 
-      floatingActionButton:
+          if (result != null) {
+            await _repository.insertOperation(result);
 
+            final state = await _financialService.getState();
 
-          FloatingActionButton(
+            setState(() {
+              operations.insert(0, result);
 
+              financialState = state;
+            });
+          }
+        },
 
-            onPressed: () async {
-
-
-              final result =
-
-                  await Navigator.push<Operation>(
-
-
-                context,
-
-
-                MaterialPageRoute(
-
-
-                  builder: (context) =>
-
-                      const AddOperationScreen(),
-
-
-                ),
-
-
-              );
-
-
-
-              if (result != null) {
-
-
-                await _repository.insertOperation(result);
-
-
-
-                setState(() {
-
-                  operations.insert(
-                    0,
-                    result,
-                  );
-
-                });
-
-
-              }
-
-
-            },
-
-
-            child: const Icon(
-              Icons.add,
-            ),
-
-
-          ),
-
-
+        child: const Icon(Icons.add),
+      ),
     );
-
   }
-
 }

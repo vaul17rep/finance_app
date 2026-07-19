@@ -4,14 +4,11 @@ import '../../models/operation_type.dart';
 
 class FinancialCalculator {
   FinancialState calculate(List<Operation> operations) {
-
     double income = 0;
     double expense = 0;
 
     for (final operation in operations) {
-
       switch (operation.type) {
-
         case OperationType.income:
           income += operation.amount;
           break;
@@ -20,15 +17,19 @@ class FinancialCalculator {
           expense += operation.amount;
           break;
 
-      }
+        case OperationType.transfer:
+          break;
 
+        case OperationType.repayment:
+          expense += operation.amount;
+          break;
+      }
     }
 
     return FinancialState(
       balance: income - expense,
       income: income,
-      expense: expense,
+      expenses: expense,
     );
-
   }
 }

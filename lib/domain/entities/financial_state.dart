@@ -1,11 +1,11 @@
 class FinancialState {
   final double balance;
   final double income;
-  final double expense;
+  final double expenses;
 
   FinancialState({
     required this.balance,
     required this.income,
-    required this.expense,
+    required this.expenses,
   });
-}
+} 

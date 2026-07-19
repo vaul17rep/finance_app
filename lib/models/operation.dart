@@ -1,11 +1,9 @@
 import 'operation_type.dart';
 
-
 class Operation {
-
   final String id;
 
-  final dynamic type;
+  final OperationType type;
 
   final double amount;
 
@@ -21,9 +19,29 @@ class Operation {
 
   final String? receiptId;
 
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+
+      'type': type.name,
+
+      'amount': amount,
+
+      'comment': comment,
+
+      'date': date.toIso8601String(),
+
+      'shop': shop,
+
+      'article': article,
+
+      'category': category,
+
+      'receiptId': receiptId,
+    };
+  }
 
   Operation({
-
     required this.id,
 
     required this.type,
@@ -41,7 +59,5 @@ class Operation {
     this.category,
 
     this.receiptId,
-
   });
-
 }

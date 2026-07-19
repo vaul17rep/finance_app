@@ -4,65 +4,42 @@ import 'package:http/http.dart' as http;
 import '../models/parsed_receipt.dart';
 import '../models/receipt_item.dart';
 
-
 class OpenRouterService {
-
-
   final String apiKey;
 
+  OpenRouterService({required this.apiKey});
 
-  OpenRouterService({
-    required this.apiKey,
-  });
-
-
-
-  Future<ParsedReceipt> analyzeReceipt(
-      String imageBase64,
-  ) async {
-
-
+  Future<ParsedReceipt> analyzeReceipt(String imageBase64) async {
+    print("IMAGE SIZE:");
+    print(imageBase64.length);
+    print("API KEY START:");
+    print(apiKey.substring(0, 15));
     final response = await http.post(
-
-      Uri.parse(
-        'https://openrouter.ai/api/v1/chat/completions',
-      ),
-
+      Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
 
       headers: {
+        'Authorization': 'Bearer $apiKey',
 
-        'Authorization':
-            'Bearer $apiKey',
+        'Content-Type': 'application/json',
 
-        'Content-Type':
-            'application/json',
+        'HTTP-Referer': 'http://localhost',
 
+        'X-Title': 'Finance App',
       },
 
-
       body: jsonEncode({
+        "model": "openai/gpt-4.1-mini",
 
-
-        "model":
-            "openai/gpt-4.1-mini",
-
-        
         "temperature": 0,
 
         "max_tokens": 1500,
 
         "messages": [
-
           {
-
             "role": "user",
 
-
             "content": [
-
-
               {
-
                 "type": "text",
 
                 "text": """
@@ -225,173 +202,94 @@ total_amount должна быть итоговой суммой покупки 
 
 
 Верни только JSON.
-"""
-
+""",
               },
 
-
               {
-
                 "type": "image_url",
 
-                "image_url": {
-
-                  "url": imageBase64
-
-                }
-
-              }
-
-
-            ]
-
-          }
-
-        ]
-
-
+                "image_url": {"url": imageBase64},
+              },
+            ],
+          },
+        ],
       }),
-
-
     );
 
+    if (response.statusCode != 200) {
+      print("STATUS:");
+      print(response.statusCode);
 
+      print("BODY:");
+      print(response.body);
 
-    if(response.statusCode != 200){
-
-      throw Exception(
-        "OpenRouter error: ${response.body}",
-      );
-
+      throw Exception("OpenRouter error");
     }
 
+    final data = jsonDecode(response.body);
 
+    String text = data["choices"][0]["message"]["content"];
 
-    final data =
-        jsonDecode(response.body);
+    text = text.replaceAll("```json", "").replaceAll("```", "").trim();
 
-
-
-    String text =
-        data["choices"][0]["message"]["content"];
-
-
-
-    text =
-        text
-        .replaceAll("```json", "")
-        .replaceAll("```", "")
-        .trim();
-
-
-
-    final json =
-        jsonDecode(text);
-
-
+    final json = jsonDecode(text);
 
     List<ReceiptItem> items = [];
 
-
-
-    for(final item in json["items"]){
-
-
+    for (final item in json["items"]) {
       items.add(
-
         ReceiptItem(
+          id: "ITEM-${DateTime.now().millisecondsSinceEpoch}",
 
-          id:
-              "ITEM-${DateTime.now().millisecondsSinceEpoch}",
+          receiptId: "",
 
+          name: item["product"] ?? "",
 
-          receiptId:
-              "",
+          quantity: (item["quantity"] ?? 1).toDouble(),
 
+          unit: item["unit"] ?? "шт",
 
-          name:
-              item["product"] ?? "",
+          price: (item["price_per_unit"] ?? 0).toDouble(),
 
+          total: (item["total_price"] ?? 0).toDouble(),
 
-          quantity:
-              (item["quantity"] ?? 1).toDouble(),
-
-
-          unit:
-              item["unit"] ?? "шт",
-
-
-          price:
-              (item["price_per_unit"] ?? 0).toDouble(),
-
-
-          total:
-              (item["total_price"] ?? 0).toDouble(),
-
-        )
-
+          category: item["category"] ?? "другое",
+        ),
       );
-
     }
-
-
 
     DateTime? date;
 
-String? time;
+    String? time;
 
+    if (json["time"] != null) {
+      time = json["time"].toString();
+    }
 
-if(json["time"] != null){
+    if (json["date"] != null && json["date"].toString().isNotEmpty) {
+      final parts = json["date"].toString().split(".");
 
-  time = json["time"].toString();
+      date = DateTime(
+        int.parse(parts[2]),
 
-}
+        int.parse(parts[1]),
 
+        int.parse(parts[0]),
+      );
+    }
 
+    return ParsedReceipt(
+      date: date,
 
-if(json["date"] != null &&
-   json["date"].toString().isNotEmpty){
+      time: time,
 
+      shop: json["store"] ?? "",
 
-  final parts =
-      json["date"].toString().split(".");
+      paymentType: json["payment_type"] ?? "",
 
+      items: items,
 
-  date = DateTime(
-
-    int.parse(parts[2]),
-
-    int.parse(parts[1]),
-
-    int.parse(parts[0]),
-
-  );
-
-}
-
-
-
-return ParsedReceipt(
-
-  date: date,
-
-  time: time,
-
-  shop:
-      json["store"] ?? "",
-
-
-  paymentType:
-      json["payment_type"] ?? "",
-
-
-  items:
-      items,
-
-
-  totalAmount:
-      (json["total_amount"] ?? 0).toDouble(),
-
-);
+      totalAmount: (json["total_amount"] ?? 0).toDouble(),
+    );
   }
 }

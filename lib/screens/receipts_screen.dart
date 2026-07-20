@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/receipt.dart';
 import '../repositories/receipt_repository.dart';
@@ -11,8 +12,15 @@ import '../secrets.dart';
 import '../services/photo_storage_service.dart';
 import '../models/receipt_item.dart';
 import 'receipt_details_screen.dart';
+import '../models/operation.dart';
+import '../models/operation_type.dart';
+import '../repositories/operation_repository.dart';
 
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+
+String encodeImage(Uint8List bytes) {
+  return "data:image/jpeg;base64,${base64Encode(bytes)}";
+}
 
 class ReceiptsScreen extends StatefulWidget {
   const ReceiptsScreen({super.key});
@@ -23,6 +31,7 @@ class ReceiptsScreen extends StatefulWidget {
 
 class _ReceiptsScreenState extends State<ReceiptsScreen> {
   final ReceiptRepository repository = ReceiptRepository();
+  final OperationRepository operationRepository = OperationRepository();
 
   final ImagePicker picker = ImagePicker();
 
@@ -38,11 +47,17 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
   }
 
   Future<void> loadReceipts() async {
+    print("START LOAD RECEIPTS");
+
     final result = await repository.getReceipts();
+
+    print("RECEIPTS COUNT: ${result.length}");
 
     setState(() {
       receipts = result;
     });
+
+    print("END LOAD RECEIPTS");
   }
 
   Future<ImageSource?> selectImageSource() async {
@@ -108,9 +123,9 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
     final compressed = await FlutterImageCompress.compressWithFile(
       image.path,
-      quality: 70,
-      minWidth: 1600,
-      minHeight: 1600,
+      quality: 85,
+      minWidth: 2000,
+      minHeight: 2000,
     );
 
     if (compressed == null) {
@@ -119,7 +134,7 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
     final bytes = compressed;
 
-    final base64 = "data:image/jpeg;base64,${base64Encode(bytes)}";
+    final base64 = await compute(encodeImage, bytes);
 
     final service = OpenRouterService(apiKey: Secrets.openRouterApiKey);
 
@@ -179,6 +194,38 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
       }).toList();
 
       await repository.insertReceiptWithItems(receipt, items);
+
+      final operation = Operation(
+        id: 'OP-${DateTime.now().millisecondsSinceEpoch}',
+
+        type: OperationType.expense,
+
+        amount: receipt.amount,
+
+        comment: receipt.comment ?? '',
+
+        date: receipt.date,
+
+        shop: receipt.shop,
+
+        paymentType: result.paymentType,
+
+        receiptId: receipt.id,
+
+        categoryId: 'food',
+
+        article: null,
+
+        regularity: null,
+
+        workDay: null,
+
+        plannedAmount: null,
+
+        processed: false,
+      );
+
+      await operationRepository.insertOperation(operation);
 
       await loadReceipts();
     } catch (e) {

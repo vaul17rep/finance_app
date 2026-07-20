@@ -25,23 +25,26 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDB(String fileName) async {
+    print("DATABASE INIT START");
     final dbPath = await getDatabasesPath();
 
     final path = join(dbPath, fileName);
 
-    debugPrint(path);
+    print("DATABASE PATH: $path");
 
     if (Platform.isWindows) {
       return await databaseFactoryFfi.openDatabase(
         path,
 
         options: OpenDatabaseOptions(
-          version: 5,
+          version: 6,
 
           onCreate: _createDB,
           onUpgrade: _upgradeDB,
 
           onOpen: (db) async {
+            print("DATABASE OPENED");
+
             await db.execute('PRAGMA foreign_keys = ON');
           },
         ),
@@ -50,12 +53,14 @@ class DatabaseHelper {
       return await openDatabase(
         path,
 
-        version: 5,
+        version: 6,
 
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
 
         onOpen: (db) async {
+          print("DATABASE OPENED");
+
           await db.execute('PRAGMA foreign_keys = ON');
         },
       );
@@ -63,6 +68,7 @@ class DatabaseHelper {
   }
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    print("UPGRADE START $oldVersion -> $newVersion");
     if (oldVersion < 2) {
       await db.execute('''
         CREATE TABLE receipts (
@@ -119,6 +125,33 @@ class DatabaseHelper {
     ADD COLUMN category TEXT
   ''');
     }
+
+    if (oldVersion < 6) {
+      await db.execute('''
+    ALTER TABLE operations
+    ADD COLUMN paymentType TEXT
+  ''');
+
+      await db.execute('''
+    ALTER TABLE operations
+    ADD COLUMN regularity TEXT
+  ''');
+
+      await db.execute('''
+    ALTER TABLE operations
+    ADD COLUMN workDay INTEGER
+  ''');
+
+      await db.execute('''
+    ALTER TABLE operations
+    ADD COLUMN plannedAmount REAL
+  ''');
+
+      await db.execute('''
+    ALTER TABLE operations
+    ADD COLUMN processed INTEGER DEFAULT 0
+  ''');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -126,25 +159,35 @@ class DatabaseHelper {
 
       CREATE TABLE operations (
 
-        id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY,
 
-        type TEXT NOT NULL,
+    type TEXT NOT NULL,
 
-        amount REAL NOT NULL,
+    amount REAL NOT NULL,
 
-        comment TEXT,
+    comment TEXT,
 
-        date TEXT NOT NULL,
+    date TEXT NOT NULL,
 
-        shop TEXT,
+    shop TEXT,
 
-        article TEXT,
+    article TEXT,
 
-        category TEXT,
+    category TEXT,
 
-        receiptId TEXT
+    paymentType TEXT,
 
-      )
+    receiptId TEXT,
+
+    regularity TEXT,
+
+    workDay INTEGER,
+
+    plannedAmount REAL,
+
+    processed INTEGER DEFAULT 0
+
+)
 
     ''');
 
@@ -205,6 +248,20 @@ class DatabaseHelper {
       )
 
     ''');
+  }
+
+  Future<void> debugOperations() async {
+    final db = await database;
+
+    final result = await db.rawQuery('''
+    SELECT receiptId, COUNT(*) as count
+    FROM operations
+    WHERE receiptId IS NOT NULL
+    GROUP BY receiptId
+    HAVING count > 1
+    ''');
+
+    debugPrint(result.toString());
   }
 
   Future<void> insertOperation(Map<String, dynamic> operation) async {
@@ -294,11 +351,23 @@ class DatabaseHelper {
   }
 
   Future<List<Receipt>> getReceipts() async {
+    print("DB GET RECEIPTS START");
+
     final db = await database;
+
+    print("DB OPENED");
 
     final data = await db.query('receipts', orderBy: 'date DESC');
 
-    return data.map((json) => Receipt.fromMap(json)).toList();
+    print("ROWS: ${data.length}");
+
+    final result = data.map((json) {
+      return Receipt.fromMap(json);
+    }).toList();
+
+    print("MODELS CREATED");
+
+    return result;
   }
 
   Future<void> updateOperationAmount(String receiptId, double amount) async {

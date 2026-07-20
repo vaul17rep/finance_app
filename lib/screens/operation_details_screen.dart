@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/operation.dart';
 import '../repositories/operation_repository.dart';
+import '../services/category_service.dart';
 
 class OperationDetailsScreen extends StatefulWidget {
   final Operation operation;
@@ -106,7 +107,7 @@ class _OperationDetailsScreenState extends State<OperationDetailsScreen> {
 
             const SizedBox(height: 16),
 
-            Text('Категория: ${operation.category ?? "нет"}'),
+            Text('Категория: ${CategoryService.getName(operation.categoryId)}'),
 
             Text('Магазин: ${operation.shop ?? "нет"}'),
 

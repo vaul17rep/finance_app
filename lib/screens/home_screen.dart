@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/operation.dart';
 import '../models/operation_type.dart';
+import 'dart:async';
 
 import '../domain/services/financial_calculator.dart';
 import '../domain/services/financial_service.dart';
@@ -19,6 +20,7 @@ import 'widgets/account_card.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'account_details_screen.dart';
+import 'widgets/create_account_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
   final Account? initialAccount;
@@ -31,6 +33,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   double _currentPage = 0;
+  bool isReordering = false;
+  int? draggedIndex;
+  Timer? _autoScrollTimer;
+  bool _isAutoScrolling = false;
   List<Operation> operations = [];
   final PageController _pageController = PageController(
     viewportFraction: 0.82,
@@ -64,6 +70,47 @@ class _HomeScreenState extends State<HomeScreen> {
     loadData();
   }
 
+  void startAutoScroll(double x) {
+    const edgeDistance = 100.0;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    _autoScrollTimer?.cancel();
+
+    if (x > screenWidth - edgeDistance) {
+      _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+        if (!_pageController.hasClients) return;
+
+        final current = _pageController.offset;
+
+        _pageController.animateTo(
+          current + 3,
+          duration: const Duration(milliseconds: 16),
+          curve: Curves.linear,
+        );
+      });
+    }
+
+    if (x < edgeDistance) {
+      _autoScrollTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+        if (!_pageController.hasClients) return;
+
+        final current = _pageController.offset;
+
+        _pageController.animateTo(
+          current - 3,
+          duration: const Duration(milliseconds: 16),
+          curve: Curves.linear,
+        );
+      });
+    }
+  }
+
+  void stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+  }
+
   void onAccountChanged(int index) {
     final account = accounts[index];
 
@@ -75,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
       account.id,
     );
 
-    final state = await _financialService.getState(accountId: account.id);
+    final state = await _financialService.getState(account: account);
 
     setState(() {
       selectedAccount = account;
@@ -89,9 +136,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final updatedAccounts = await Future.wait(
       loadedAccounts.map((account) async {
-        final state = await _financialService.getState(accountId: account.id);
+        final state = await _financialService.getState(account: account);
 
-        return account.copyWith(balance: state.balance);
+        return account;
       }),
     );
     if (widget.initialAccount != null) {
@@ -103,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
         account.id,
       );
 
-      final state = await _financialService.getState(accountId: account.id);
+      final state = await _financialService.getState(account: account);
 
       setState(() {
         accounts = updatedAccounts;
@@ -117,14 +164,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final mainAccount = await _accountRepository.getMainAccount();
 
     if (mainAccount == null) {
-      final loadedOperations = await _repository.getOperations();
-      final state = await _financialService.getState();
-
       setState(() {
         accounts = updatedAccounts;
         selectedAccount = null;
-        operations = loadedOperations;
-        financialState = state;
+        operations = [];
+        financialState = FinancialState(balance: 0, income: 0, expenses: 0);
       });
 
       return;
@@ -134,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
       mainAccount.id,
     );
 
-    final state = await _financialService.getState(accountId: mainAccount.id);
+    final state = await _financialService.getState(account: mainAccount);
 
     setState(() {
       accounts = updatedAccounts;
@@ -209,6 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
               height: cardWidth / AccountCard.aspectRatio,
 
               child: PageView.builder(
+                physics: const ClampingScrollPhysics(),
                 allowImplicitScrolling: true,
                 controller: _pageController,
                 clipBehavior: Clip.none,
@@ -216,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 padEnds: false,
 
-                pageSnapping: true,
+                pageSnapping: false,
 
                 onPageChanged: (index) {
                   if (index >= accounts.length) return;
@@ -231,26 +276,55 @@ class _HomeScreenState extends State<HomeScreen> {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
 
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(24),
-                          color: Colors.grey.withOpacity(0.25),
-                        ),
+                      child: GestureDetector(
+                        onTap: () async {
+                          final account = await showCreateAccountDialog(
+                            context,
+                            isMain: accounts.isEmpty,
+                          );
 
-                        child: const Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.add_circle_outline, size: 40),
-                              SizedBox(height: 8),
-                              Text(
-                                "Создать счёт",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                          if (account != null) {
+                            await _accountRepository.insertAccount(account);
+
+                            await loadData();
+
+                            final newIndex = accounts.indexWhere(
+                              (e) => e.id == account.id,
+                            );
+
+                            if (newIndex != -1) {
+                              _pageController.animateToPage(
+                                newIndex,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+
+                              await loadAccountState(account);
+                            }
+                          }
+                        },
+
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(24),
+                            color: Colors.grey.withOpacity(0.25),
+                          ),
+
+                          child: const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_circle_outline, size: 40),
+                                SizedBox(height: 8),
+                                Text(
+                                  "Создать счёт",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -270,26 +344,134 @@ class _HomeScreenState extends State<HomeScreen> {
 
                           duration: const Duration(milliseconds: 200),
 
-                          child: GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AccountDetailsScreen(account: account),
+                          child: DragTarget<int>(
+                            onAccept: (oldIndex) {},
+
+                            builder: (context, candidate, rejected) {
+                              return LongPressDraggable<int>(
+                                data: index,
+
+                                onDragStarted: () {
+                                  setState(() {
+                                    isReordering = true;
+                                    draggedIndex = index;
+                                  });
+                                },
+
+                                onDragUpdate: (details) {
+                                  final dx = details.globalPosition.dx;
+                                  final width = MediaQuery.of(
+                                    context,
+                                  ).size.width;
+
+                                  if (dx > width * 0.8) {
+                                    final next =
+                                        (_pageController.page ?? 0).round() + 1;
+
+                                    if (next < accounts.length) {
+                                      _pageController.animateToPage(
+                                        next,
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    }
+                                  }
+
+                                  if (dx < width * 0.2) {
+                                    final previous =
+                                        (_pageController.page ?? 0).round() - 1;
+
+                                    if (previous >= 0) {
+                                      _pageController.animateToPage(
+                                        previous,
+                                        duration: const Duration(
+                                          milliseconds: 300,
+                                        ),
+                                        curve: Curves.easeInOut,
+                                      );
+                                    }
+                                  }
+                                },
+
+                                onDragEnd: (_) async {
+                                  stopAutoScroll();
+
+                                  if (draggedIndex != null) {
+                                    final currentPage =
+                                        (_pageController.page ?? 0).round();
+
+                                    setState(() {
+                                      final moved = accounts.removeAt(
+                                        draggedIndex!,
+                                      );
+
+                                      if (currentPage >= accounts.length) {
+                                        accounts.add(moved);
+                                      } else {
+                                        accounts.insert(currentPage, moved);
+                                      }
+                                    });
+
+                                    await _accountRepository
+                                        .updateAccountsOrder(accounts);
+                                  }
+
+                                  setState(() {
+                                    isReordering = false;
+                                    draggedIndex = null;
+                                  });
+                                },
+
+                                feedback: Material(
+                                  color: Colors.transparent,
+
+                                  child: Transform.scale(
+                                    scale: 1.05,
+
+                                    child: AccountCard(
+                                      account: account,
+                                      balance: account.id == selectedAccount?.id
+                                          ? (financialState?.balance ?? 0)
+                                          : account.balance,
+                                      width: cardWidth,
+                                    ),
+                                  ),
+                                ),
+
+                                childWhenDragging: Opacity(
+                                  opacity: 0.3,
+
+                                  child: AccountCard(
+                                    account: account,
+                                    balance: account.balance,
+                                    width: cardWidth,
+                                  ),
+                                ),
+
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => AccountDetailsScreen(
+                                          account: account,
+                                        ),
+                                      ),
+                                    );
+                                  },
+
+                                  child: AccountCard(
+                                    account: account,
+                                    balance: account.id == selectedAccount?.id
+                                        ? (financialState?.balance ?? 0)
+                                        : account.balance,
+                                    width: cardWidth,
+                                  ),
                                 ),
                               );
                             },
-
-                            child: AccountCard(
-                              account: account,
-
-                              balance: account.id == selectedAccount?.id
-                                  ? (financialState?.balance ?? 0)
-                                  : account.balance,
-
-                              width: cardWidth,
-                            ),
                           ),
                         ),
                       ),
@@ -325,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '${(financialState?.income ?? 0).toStringAsFixed(0)} ₽',
+                            '${(financialState?.income ?? 0).toStringAsFixed(2)} ₽',
                             style: AppTextStyles.balance,
                           ),
                         ],
@@ -349,7 +531,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '${(financialState?.expenses ?? 0).toStringAsFixed(0)} ₽',
+                            '${(financialState?.expenses ?? 0).toStringAsFixed(2)} ₽',
                             style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
@@ -443,7 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   trailing: Text(
                     '${op.type == OperationType.expense ? "-" : "+"}'
-                    '${op.amount.toStringAsFixed(0)} ₽',
+                    '${op.amount.toStringAsFixed(2)} ₽',
                   ),
                 ),
               ),

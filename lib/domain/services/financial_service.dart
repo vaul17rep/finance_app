@@ -1,6 +1,7 @@
 import '../../domain/entities/financial_state.dart';
 import '../../domain/services/financial_calculator.dart';
 import '../../repositories/operation_repository.dart';
+import '../../models/account.dart';
 
 class FinancialService {
   final OperationRepository repository;
@@ -8,11 +9,9 @@ class FinancialService {
 
   FinancialService(this.repository, this.calculator);
 
-  Future<FinancialState> getState({String? accountId}) async {
-    final operations = accountId == null
-        ? await repository.getOperations()
-        : await repository.getOperationsByAccount(accountId);
+  Future<FinancialState> getState({required Account account}) async {
+    final operations = await repository.getOperationsByAccount(account.id);
 
-    return calculator.calculate(operations);
+    return calculator.calculate(account, operations);
   }
 }

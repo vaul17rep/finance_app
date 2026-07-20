@@ -44,9 +44,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
       widget.account.id,
     );
 
-    final financial = await _financialService.getState(
-      accountId: widget.account.id,
-    );
+    final financial = await _financialService.getState(account: widget.account);
 
     setState(() {
       operations = loadedOperations;
@@ -115,7 +113,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
             const SizedBox(height: 8),
 
             Text(
-              "${value.toStringAsFixed(0)} ₽",
+              "${value.toStringAsFixed(2)} ₽",
 
               style: Theme.of(context).textTheme.titleLarge,
             ),

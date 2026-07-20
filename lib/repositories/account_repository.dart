@@ -7,11 +7,21 @@ class AccountRepository {
   Future<List<Account>> getAccounts() async {
     final data = await _dbHelper.getAccounts();
 
-    return data.map((json) => Account.fromMap(json)).toList();
+    final accounts = data.map((json) => Account.fromMap(json)).toList();
+
+    accounts.sort((a, b) => a.position.compareTo(b.position));
+
+    return accounts;
   }
 
   Future<void> insertAccount(Account account) async {
     await _dbHelper.insertAccount(account.toMap());
+  }
+
+  Future<void> updateAccountsOrder(List<Account> accounts) async {
+    for (int i = 0; i < accounts.length; i++) {
+      await updateAccount(accounts[i].copyWith(position: i));
+    }
   }
 
   Future<void> updateAccount(Account account) async {

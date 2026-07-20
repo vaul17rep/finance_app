@@ -1,9 +1,10 @@
+import '../../models/account.dart';
 import '../entities/financial_state.dart';
 import '../../models/operation.dart';
 import '../../models/operation_type.dart';
 
 class FinancialCalculator {
-  FinancialState calculate(List<Operation> operations) {
+  FinancialState calculate(Account account, List<Operation> operations) {
     double income = 0;
     double expense = 0;
 
@@ -27,7 +28,7 @@ class FinancialCalculator {
     }
 
     return FinancialState(
-      balance: income - expense,
+      balance: account.initialBalance + income - expense,
       income: income,
       expenses: expense,
     );

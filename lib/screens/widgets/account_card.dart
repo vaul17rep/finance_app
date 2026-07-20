@@ -101,7 +101,7 @@ class AccountCard extends StatelessWidget {
                 ),
 
                 Text(
-                  "${balance.toStringAsFixed(0)} ₽",
+                  "${balance.toStringAsFixed(2)} ₽",
 
                   style: AppTextStyles.balance.copyWith(
                     color: Colors.white,

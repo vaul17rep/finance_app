@@ -4,7 +4,7 @@ import '../../models/operation_type.dart';
 
 class AccountBalanceService {
   double calculate(Account account, List<Operation> operations) {
-    double balance = 0;
+    double balance = account.initialBalance;
 
     for (final operation in operations) {
       if (operation.accountId != account.id) {

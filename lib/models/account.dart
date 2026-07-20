@@ -5,14 +5,16 @@ class Account {
   final double initialBalance;
   final bool isMain;
   final String type;
+  final int position;
 
   Account({
     required this.id,
     required this.name,
     required this.balance,
-    required this.initialBalance,
+    this.initialBalance = 0,
     required this.isMain,
     this.type = 'other',
+    this.position = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +25,7 @@ class Account {
       'initialBalance': initialBalance,
       'isMain': isMain ? 1 : 0,
       'type': type,
+      'position': position,
     };
   }
 
@@ -34,6 +37,7 @@ class Account {
       initialBalance: (map['initialBalance'] ?? map['balance'] ?? 0).toDouble(),
       isMain: (map['isMain'] ?? 0) == 1,
       type: map['type'] as String? ?? 'other',
+      position: map['position'] ?? 0,
     );
   }
 
@@ -44,6 +48,7 @@ class Account {
     double? initialBalance,
     bool? isMain,
     String? type,
+    int? position,
   }) {
     return Account(
       id: id ?? this.id,
@@ -52,6 +57,7 @@ class Account {
       initialBalance: initialBalance ?? this.initialBalance,
       isMain: isMain ?? this.isMain,
       type: type ?? this.type,
+      position: position ?? this.position,
     );
   }
 }

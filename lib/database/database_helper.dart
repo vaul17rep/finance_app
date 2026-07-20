@@ -111,7 +111,8 @@ CREATE TABLE accounts (
   balance REAL NOT NULL DEFAULT 0,
   initialBalance REAL NOT NULL DEFAULT 0,
   isMain INTEGER NOT NULL DEFAULT 0,
-  type TEXT NOT NULL DEFAULT 'other'
+  type TEXT NOT NULL DEFAULT 'other',
+position INTEGER DEFAULT 0
 )
 ''');
 

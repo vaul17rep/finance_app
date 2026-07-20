@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:uuid/uuid.dart';
 
 import '../models/account.dart';
 import '../repositories/account_repository.dart';
 import '../repositories/operation_repository.dart';
 import '../domain/services/account_balance_service.dart';
 import 'home_screen.dart';
+import 'widgets/create_account_dialog.dart';
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
@@ -27,6 +27,55 @@ class _AccountsScreenState extends State<AccountsScreen> {
     super.initState();
 
     loadAccounts();
+  }
+
+  Future<void> editBalance(Account account) async {
+    final controller = TextEditingController(
+      text: account.balance.toStringAsFixed(2),
+    );
+
+    final value = await showDialog<double>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Изменить баланс'),
+
+          content: TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(hintText: 'Например: 1500.50'),
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Отмена'),
+            ),
+
+            TextButton(
+              onPressed: () {
+                final parsed = double.tryParse(
+                  controller.text.replaceAll(',', '.'),
+                );
+
+                Navigator.pop(context, parsed);
+              },
+              child: const Text('Сохранить'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (value == null) {
+      return;
+    }
+
+    await repository.updateAccount(account.copyWith(initialBalance: value));
+
+    await loadAccounts();
   }
 
   Future<void> editAccount(Account account) async {
@@ -132,60 +181,23 @@ class _AccountsScreenState extends State<AccountsScreen> {
   }
 
   Future<void> addAccount() async {
-    final controller = TextEditingController();
-
-    final name = await showDialog<String>(
-      context: context,
-
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Новый счёт'),
-
-          content: TextField(
-            controller: controller,
-
-            decoration: const InputDecoration(hintText: 'Название счёта'),
-          ),
-
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-
-              child: const Text('Отмена'),
-            ),
-
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context, controller.text.trim());
-              },
-
-              child: const Text('Создать'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (name == null || name.isEmpty) {
-      return;
-    }
-
-    final account = Account(
-      id: const Uuid().v4(),
-
-      name: name,
-
-      balance: 0,
-
+    final account = await showCreateAccountDialog(
+      context,
       isMain: accounts.isEmpty,
     );
 
+    if (account == null) {
+      return;
+    }
+
+    print("CREATED ACCOUNT: ${account.name}");
+
     await repository.insertAccount(account);
+
     final test = await repository.getAccounts();
 
     print(test);
+
     await loadAccounts();
   }
 
@@ -249,7 +261,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                 const SizedBox(height: 6),
 
                                 Text(
-                                  '${account.balance.toStringAsFixed(0)} ₽',
+                                  '${account.balance.toStringAsFixed(2)} ₽',
                                   style: const TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
@@ -291,6 +303,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                 await editAccount(account);
                               }
 
+                              if (value == 'balance') {
+                                await editBalance(account);
+                              }
+
                               if (value == 'delete') {
                                 await deleteAccount(account);
                               }
@@ -306,6 +322,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
                               const PopupMenuItem(
                                 value: 'edit',
                                 child: Text('Редактировать'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'balance',
+                                child: Text('Изменить баланс'),
                               ),
                               if (!account.isMain)
                                 const PopupMenuItem(

@@ -83,7 +83,7 @@ class _EditReceiptItemScreenState extends State<EditReceiptItemScreen> {
     await repository.recalculateReceiptAmount(updatedItem.receiptId);
 
     if (mounted) {
-      Navigator.pop(context, updatedItem);
+      Navigator.pop(context, true);
     }
   }
 

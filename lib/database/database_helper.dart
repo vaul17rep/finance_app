@@ -229,6 +229,12 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> deleteOperation(String id) async {
+    final db = await database;
+
+    await db.delete('operations', where: 'id = ?', whereArgs: [id]);
+  }
+
   // ============================================
   // Обновление операции по receiptId
   // ============================================
@@ -242,12 +248,7 @@ class DatabaseHelper {
 
     await db.update(
       'operations',
-      {
-        'amount': amount,
-        'comment': shop,
-        'shop': shop,
-        'date': date.toIso8601String(),
-      },
+      {'amount': amount, 'shop': shop, 'date': date.toIso8601String()},
       where: 'receiptId = ?',
       whereArgs: [receiptId],
     );

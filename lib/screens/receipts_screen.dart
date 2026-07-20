@@ -12,9 +12,6 @@ import '../services/photo_storage_service.dart';
 import '../models/receipt_item.dart';
 import 'receipt_details_screen.dart';
 
-import '../models/operation.dart';
-import '../repositories/operation_repository.dart';
-import '../models/operation_type.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 class ReceiptsScreen extends StatefulWidget {
@@ -26,8 +23,6 @@ class ReceiptsScreen extends StatefulWidget {
 
 class _ReceiptsScreenState extends State<ReceiptsScreen> {
   final ReceiptRepository repository = ReceiptRepository();
-
-  final OperationRepository operationRepository = OperationRepository();
 
   final ImagePicker picker = ImagePicker();
 
@@ -184,24 +179,6 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
       }).toList();
 
       await repository.insertReceiptWithItems(receipt, items);
-
-      final operation = Operation(
-        id: 'OP-${DateTime.now().millisecondsSinceEpoch}',
-
-        type: OperationType.expense,
-
-        amount: receipt.amount,
-
-        comment: receipt.shop,
-
-        date: receipt.date,
-
-        shop: receipt.shop,
-
-        receiptId: receipt.id,
-      );
-
-      await operationRepository.insertOperation(operation);
 
       await loadReceipts();
     } catch (e) {

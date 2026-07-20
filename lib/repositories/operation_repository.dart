@@ -47,8 +47,6 @@ class OperationRepository {
     );
   }
 
-
-
   Future<void> insertOperation(Operation operation) async {
     await _dbHelper.insertOperation({
       'id': operation.id,
@@ -69,6 +67,10 @@ class OperationRepository {
 
       'receiptId': operation.receiptId,
     });
+  }
+
+  Future<void> deleteOperation(String id) async {
+    await _dbHelper.deleteOperation(id);
   }
 
   Future<void> deleteByReceiptId(String receiptId) async {

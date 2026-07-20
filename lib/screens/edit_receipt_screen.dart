@@ -105,22 +105,23 @@ class _EditReceiptScreenState extends State<EditReceiptScreen> {
   }
 
   Future<void> save() async {
+    final total = items.fold<double>(0, (sum, item) => sum + item.total);
+
     final updatedReceipt = widget.receipt.copyWith(
       shop: shopController.text,
 
       comment: commentController.text,
 
       date: selectedDate,
+
+      amount: total,
     );
 
     hasChanges = false;
 
     await repository.updateReceipt(updatedReceipt);
 
-    await repository.updateReceiptAmount(
-      updatedReceipt.id,
-      updatedReceipt.amount,
-    );
+    await repository.updateReceiptAmount(updatedReceipt.id, total);
 
     if (mounted) {
       Navigator.pop(context, updatedReceipt);
@@ -239,6 +240,10 @@ class _EditReceiptScreenState extends State<EditReceiptScreen> {
 
                               if (updatedItem != null) {
                                 await loadItems();
+
+                                setState(() {
+                                  hasChanges = true;
+                                });
                               }
                             },
                           );

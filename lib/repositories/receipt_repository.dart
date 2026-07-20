@@ -1,9 +1,14 @@
 import '../database/database_helper.dart';
 import '../models/receipt.dart';
 import '../models/receipt_item.dart';
+import '../models/operation.dart';
+import '../models/operation_type.dart';
+import 'operation_repository.dart';
+import 'package:uuid/uuid.dart';
 
 class ReceiptRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final OperationRepository _operationRepository = OperationRepository();
 
   // ============================================
   // Добавление чека
@@ -49,6 +54,13 @@ class ReceiptRepository {
 
   Future<void> updateReceipt(Receipt receipt) async {
     await _dbHelper.updateReceipt(receipt);
+
+    await _dbHelper.updateOperationByReceiptId(
+      receipt.id,
+      receipt.amount,
+      receipt.shop,
+      receipt.date,
+    );
   }
 
   // ============================================
@@ -88,5 +100,23 @@ class ReceiptRepository {
     List<ReceiptItem> items,
   ) async {
     await _dbHelper.insertReceiptWithItems(receipt, items);
+
+    final operation = Operation(
+      id: const Uuid().v4(),
+
+      type: OperationType.expense,
+
+      amount: receipt.amount,
+
+      comment: receipt.shop,
+
+      date: receipt.date,
+
+      shop: receipt.shop,
+
+      receiptId: receipt.id,
+    );
+
+    await _operationRepository.insertOperation(operation);
   }
 }

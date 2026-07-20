@@ -219,6 +219,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 pageSnapping: true,
 
                 onPageChanged: (index) {
+                  if (index >= accounts.length) return;
+
                   final account = accounts[index];
 
                   loadAccountState(account);

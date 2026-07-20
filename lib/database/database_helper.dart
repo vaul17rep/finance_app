@@ -94,6 +94,13 @@ class DatabaseHelper {
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     print("DATABASE UPGRADE $oldVersion -> $newVersion");
+
+    if (oldVersion < 2) {
+      await db.execute('''
+      ALTER TABLE accounts
+      ADD COLUMN type TEXT NOT NULL DEFAULT 'other'
+    ''');
+    }
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -102,7 +109,9 @@ CREATE TABLE accounts (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   balance REAL NOT NULL DEFAULT 0,
-  isMain INTEGER NOT NULL DEFAULT 0
+  initialBalance REAL NOT NULL DEFAULT 0,
+  isMain INTEGER NOT NULL DEFAULT 0,
+  type TEXT NOT NULL DEFAULT 'other'
 )
 ''');
 
@@ -203,7 +212,6 @@ CREATE TABLE operations (
 
     debugPrint(result.toString());
   }
-
 
   Future<void> insertOperation(Map<String, dynamic> operation) async {
     final db = await database;

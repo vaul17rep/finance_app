@@ -15,6 +15,7 @@ import 'receipt_details_screen.dart';
 import '../models/operation.dart';
 import '../models/operation_type.dart';
 import '../repositories/operation_repository.dart';
+import 'widgets/select_account_dialog.dart';
 
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
@@ -141,6 +142,12 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
     try {
       final result = await service.analyzeReceipt(base64);
 
+      final account = await showSelectAccountDialog(context);
+
+      if (account == null) {
+        return;
+      }
+
       print("МАГАЗИН:");
       print(result.shop);
 
@@ -207,6 +214,8 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
         paymentType: result.paymentType,
 
         receiptId: receipt.id,
+
+        accountId: account.id,
 
         categoryId: 'food',
 

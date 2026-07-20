@@ -8,4 +8,4 @@ class FinancialState {
     required this.income,
     required this.expenses,
   });
-} 
+}

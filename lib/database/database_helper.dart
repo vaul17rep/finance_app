@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../models/receipt.dart';
 import '../models/receipt_item.dart';
+import '../models/account.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -37,7 +38,7 @@ class DatabaseHelper {
         path,
 
         options: OpenDatabaseOptions(
-          version: 6,
+          version: 1,
 
           onCreate: _createDB,
           onUpgrade: _upgradeDB,
@@ -53,7 +54,7 @@ class DatabaseHelper {
       return await openDatabase(
         path,
 
-        version: 6,
+        version: 1,
 
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
@@ -67,129 +68,68 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> debugDatabaseStructure() async {
+    final db = await database;
+
+    final result = await db.rawQuery("PRAGMA table_info(operations)");
+    await DatabaseHelper.instance.debugDatabaseStructure();
+
+    print("OPERATIONS STRUCTURE:");
+    for (final column in result) {
+      print(column);
+    }
+  }
+
+  Future<void> debugOperationsTable() async {
+    final db = await database;
+
+    final result = await db.rawQuery("PRAGMA table_info(operations)");
+
+    print("===== OPERATIONS TABLE =====");
+
+    for (final row in result) {
+      print(row);
+    }
+  }
+
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
-    print("UPGRADE START $oldVersion -> $newVersion");
-    if (oldVersion < 2) {
-      await db.execute('''
-        CREATE TABLE receipts (
-          id TEXT PRIMARY KEY,
-          date TEXT NOT NULL,
-          shop TEXT NOT NULL,
-          paymentType TEXT,
-          amount REAL NOT NULL,
-          photoPath TEXT,
-          status TEXT NOT NULL,
-          comment TEXT
-        )
-      ''');
-
-      await db.execute('''
-        CREATE TABLE receipt_items (
-          id TEXT PRIMARY KEY,
-          receiptId TEXT NOT NULL,
-          name TEXT NOT NULL,
-          quantity REAL NOT NULL,
-          unit TEXT NOT NULL,
-          price REAL NOT NULL,
-          total REAL NOT NULL,
-          FOREIGN KEY (receiptId) REFERENCES receipts(id)
-        )
-      ''');
-    }
-
-    if (oldVersion < 3) {
-      await db.execute('''
-        ALTER TABLE operations
-        ADD COLUMN shop TEXT
-      ''');
-
-      await db.execute('''
-        ALTER TABLE operations
-        ADD COLUMN article TEXT
-      ''');
-
-      await db.execute('''
-        ALTER TABLE operations
-        ADD COLUMN category TEXT
-      ''');
-
-      await db.execute('''
-        ALTER TABLE operations
-        ADD COLUMN receiptId TEXT
-      ''');
-    }
-
-    if (oldVersion < 5) {
-      await db.execute('''
-    ALTER TABLE receipt_items
-    ADD COLUMN category TEXT
-  ''');
-    }
-
-    if (oldVersion < 6) {
-      await db.execute('''
-    ALTER TABLE operations
-    ADD COLUMN paymentType TEXT
-  ''');
-
-      await db.execute('''
-    ALTER TABLE operations
-    ADD COLUMN regularity TEXT
-  ''');
-
-      await db.execute('''
-    ALTER TABLE operations
-    ADD COLUMN workDay INTEGER
-  ''');
-
-      await db.execute('''
-    ALTER TABLE operations
-    ADD COLUMN plannedAmount REAL
-  ''');
-
-      await db.execute('''
-    ALTER TABLE operations
-    ADD COLUMN processed INTEGER DEFAULT 0
-  ''');
-    }
+    print("DATABASE UPGRADE $oldVersion -> $newVersion");
   }
 
   Future<void> _createDB(Database db, int version) async {
     await db.execute('''
-
-      CREATE TABLE operations (
-
-    id TEXT PRIMARY KEY,
-
-    type TEXT NOT NULL,
-
-    amount REAL NOT NULL,
-
-    comment TEXT,
-
-    date TEXT NOT NULL,
-
-    shop TEXT,
-
-    article TEXT,
-
-    category TEXT,
-
-    paymentType TEXT,
-
-    receiptId TEXT,
-
-    regularity TEXT,
-
-    workDay INTEGER,
-
-    plannedAmount REAL,
-
-    processed INTEGER DEFAULT 0
-
+CREATE TABLE accounts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  balance REAL NOT NULL DEFAULT 0,
+  isMain INTEGER NOT NULL DEFAULT 0
 )
+''');
 
-    ''');
+    await db.execute('''
+CREATE TABLE operations (
+  id TEXT PRIMARY KEY,
+  accountId TEXT,
+
+  type TEXT NOT NULL,
+  amount REAL NOT NULL,
+
+  comment TEXT,
+  date TEXT NOT NULL,
+
+  shop TEXT,
+  article TEXT,
+  categoryId TEXT,
+  paymentType TEXT,
+
+  receiptId TEXT,
+  regularity TEXT,
+  workDay INTEGER,
+
+  plannedAmount REAL,
+  processed INTEGER DEFAULT 0
+)
+''');
 
     await db.execute('''
 
@@ -264,16 +204,63 @@ class DatabaseHelper {
     debugPrint(result.toString());
   }
 
+
   Future<void> insertOperation(Map<String, dynamic> operation) async {
     final db = await database;
 
-    await db.insert('operations', operation);
+    await db.transaction((txn) async {
+      await txn.insert('operations', operation);
+
+      final accountId = operation['accountId'];
+
+      if (accountId == null) {
+        return;
+      }
+
+      final amount = operation['amount'] as double;
+      final type = operation['type'];
+
+      if (type == 'income') {
+        await txn.rawUpdate(
+          '''
+        UPDATE accounts
+        SET balance = balance + ?
+        WHERE id = ?
+        ''',
+          [amount, accountId],
+        );
+      }
+
+      if (type == 'expense') {
+        await txn.rawUpdate(
+          '''
+        UPDATE accounts
+        SET balance = balance - ?
+        WHERE id = ?
+        ''',
+          [amount, accountId],
+        );
+      }
+    });
   }
 
   Future<List<Map<String, dynamic>>> getOperations() async {
     final db = await database;
 
     return await db.query('operations', orderBy: 'date DESC');
+  }
+
+  Future<List<Map<String, dynamic>>> getOperationsByAccount(
+    String accountId,
+  ) async {
+    final db = await database;
+
+    return await db.query(
+      'operations',
+      where: 'accountId = ?',
+      whereArgs: [accountId],
+      orderBy: 'date DESC',
+    );
   }
 
   Future<void> deleteOperationByReceiptId(String receiptId) async {
@@ -284,6 +271,39 @@ class DatabaseHelper {
       where: 'receiptId = ?',
       whereArgs: [receiptId],
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getAccounts() async {
+    final db = await database;
+
+    return await db.query('accounts');
+  }
+
+  Future<void> insertAccount(Map<String, dynamic> account) async {
+    final db = await database;
+    print('INSERT ACCOUNT: $account');
+    await db.insert('accounts', account);
+
+    final result = await db.query('accounts');
+
+    print('ALL ACCOUNTS: $result');
+  }
+
+  Future<void> updateAccount(Account account) async {
+    final db = await database;
+
+    await db.update(
+      'accounts',
+      account.toMap(),
+      where: 'id = ?',
+      whereArgs: [account.id],
+    );
+  }
+
+  Future<void> deleteAccount(String id) async {
+    final db = await database;
+
+    await db.delete('accounts', where: 'id = ?', whereArgs: [id]);
   }
 
   Future<void> deleteOperation(String id) async {

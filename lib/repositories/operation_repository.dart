@@ -1,5 +1,8 @@
+// ignore_for_file: avoid_print
+
 import '../database/database_helper.dart';
 import '../models/operation.dart';
+
 
 class OperationRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
@@ -22,6 +25,12 @@ class OperationRepository {
     for (var item in data) {
       print(item);
     }
+
+    return data.map((json) => Operation.fromMap(json)).toList();
+  }
+
+  Future<List<Operation>> getOperationsByAccount(String accountId) async {
+    final data = await _dbHelper.getOperationsByAccount(accountId);
 
     return data.map((json) => Operation.fromMap(json)).toList();
   }

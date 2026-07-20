@@ -8,8 +8,10 @@ class FinancialService {
 
   FinancialService(this.repository, this.calculator);
 
-  Future<FinancialState> getState() async {
-    final operations = await repository.getOperations();
+  Future<FinancialState> getState({String? accountId}) async {
+    final operations = accountId == null
+        ? await repository.getOperations()
+        : await repository.getOperationsByAccount(accountId);
 
     return calculator.calculate(operations);
   }

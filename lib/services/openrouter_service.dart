@@ -13,8 +13,6 @@ class OpenRouterService {
   Future<ParsedReceipt> analyzeReceipt(String imageBase64) async {
     print("IMAGE SIZE:");
     print(imageBase64.length);
-    print("API KEY START:");
-    print(apiKey.substring(0, 15));
     final response = await http.post(
       Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
 
@@ -356,37 +354,95 @@ total_amount должна быть итоговой суммой покупки.
     print("==============================");
     print("JSON PARSING...");
 
-    final json = jsonDecode(text);
+    var cleanText = text;
 
+    // Оставляем только JSON
+    final start = cleanText.indexOf("{");
+    final end = cleanText.lastIndexOf("}");
+
+    if (start != -1 && end != -1) {
+      cleanText = cleanText.substring(start, end + 1);
+    }
+
+    dynamic json;
+
+    try {
+      json = jsonDecode(cleanText);
+    } catch (e) {
+      print("==============================");
+      print("JSON ERROR:");
+      print(e);
+      print("==============================");
+
+      print("BROKEN JSON:");
+      print(cleanText);
+
+      throw Exception("Invalid AI JSON");
+    }
+
+    print("==============================");
+    print("ROOT FIELDS");
+    print("DATE: ${json["date"]}");
+    print("TIME: ${json["time"]}");
+    print("STORE: ${json["store"]}");
+    print("PAYMENT: ${json["payment_type"]}");
+    print("TOTAL: ${json["total_amount"]}");
+    print("==============================");
     print("==============================");
     print("PARSED JSON:");
     print(jsonEncode(json));
+    print("==============================");
+    print("ITEMS COUNT FROM AI:");
+    print((json["items"] ?? []).length);
+    print("==============================");
 
     List<ReceiptItem> items = [];
 
-    for (final item in json["items"]) {
+    for (int i = 0; i < (json["items"] ?? []).length; i++) {
+      final item = json["items"][i];
+
       print("==============================");
-      print("ITEM:");
-      print(item);
-      items.add(
-        ReceiptItem(
-          id: "ITEM-${DateTime.now().millisecondsSinceEpoch}",
+      print("AI ITEM #$i");
+      print("PRODUCT: ${item["product"]}");
+      print("CATEGORY: ${item["category"]}");
+      print("QUANTITY: ${item["quantity"]}");
+      print("UNIT: ${item["unit"]}");
+      print("PRICE PER UNIT: ${item["price_per_unit"]}");
+      print("TOTAL PRICE: ${item["total_price"]}");
+      print("BEFORE DISCOUNT: ${item["price_before_discount"]}");
+      print("COMMENT: ${item["comment"]}");
 
-          receiptId: "",
+      final receiptItem = ReceiptItem(
+        id: "ITEM-${DateTime.now().millisecondsSinceEpoch}-$i",
 
-          name: item["product"] ?? "",
+        receiptId: "",
 
-          quantity: (item["quantity"] ?? 1).toDouble(),
+        name: item["product"] ?? "",
 
-          unit: item["unit"] ?? "шт",
+        quantity: double.tryParse(item["quantity"].toString()) ?? 1,
 
-          price: (item["price_per_unit"] ?? 0).toDouble(),
+        price: double.tryParse(item["price_per_unit"].toString()) ?? 0,
 
-          total: (item["total_price"] ?? 0).toDouble(),
+        total: double.tryParse(item["total_price"].toString()) ?? 0,
 
-          category: item["category"] ?? "другое",
-        ),
+        priceBeforeDiscount:
+            double.tryParse(item["price_before_discount"].toString()) ?? 0,
+
+        comment: item["comment"] ?? "",
+
+        category: item["category"] ?? "другое",
       );
+
+      print("DART ITEM #$i");
+      print("NAME: ${receiptItem.name}");
+      print("CATEGORY: ${receiptItem.category}");
+      print("QUANTITY: ${receiptItem.quantity}");
+      print("PRICE: ${receiptItem.price}");
+      print("TOTAL: ${receiptItem.total}");
+      print("DISCOUNT PRICE: ${receiptItem.priceBeforeDiscount}");
+      print("COMMENT: ${receiptItem.comment}");
+
+      items.add(receiptItem);
     }
 
     DateTime? date;
@@ -400,13 +456,13 @@ total_amount должна быть итоговой суммой покупки.
     if (json["date"] != null && json["date"].toString().isNotEmpty) {
       final parts = json["date"].toString().split(".");
 
-      date = DateTime(
-        int.parse(parts[2]),
-
-        int.parse(parts[1]),
-
-        int.parse(parts[0]),
-      );
+      if (parts.length == 3) {
+        date = DateTime(
+          int.parse(parts[2]),
+          int.parse(parts[1]),
+          int.parse(parts[0]),
+        );
+      }
     }
 
     print("==============================");
@@ -443,7 +499,7 @@ total_amount должна быть итоговой суммой покупки.
 
       items: items,
 
-      totalAmount: (json["total_amount"] ?? 0).toDouble(),
+      totalAmount: double.tryParse(json["total_amount"].toString()) ?? 0,
     );
   }
 }

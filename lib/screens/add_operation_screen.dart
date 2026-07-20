@@ -1,40 +1,65 @@
 import 'package:flutter/material.dart';
-import '../models/operation.dart';
+import '../models/operation.dart' as model;
 import '../models/operation_type.dart';
+import '../models/account.dart';
+import '../repositories/account_repository.dart';
 
 class AddOperationScreen extends StatefulWidget {
-  const AddOperationScreen({super.key});
+  final Account? account;
+
+  const AddOperationScreen({super.key, this.account});
 
   @override
-  State<AddOperationScreen> createState() =>
-      _AddOperationScreenState();
+  State<AddOperationScreen> createState() => _AddOperationScreenState();
 }
 
-
 class _AddOperationScreenState extends State<AddOperationScreen> {
-
   final amountController = TextEditingController();
   final commentController = TextEditingController();
+  final AccountRepository accountRepository = AccountRepository();
+
+  List<Account> accounts = [];
 
   OperationType type = OperationType.expense;
+  Account? selectedAccount;
 
+  @override
+  void initState() {
+    super.initState();
+    loadAccounts();
+  }
+
+  Future<void> loadAccounts() async {
+    final data = await accountRepository.getAccounts();
+
+    Account? account;
+
+    if (widget.account != null) {
+      account = data.firstWhere(
+        (a) => a.id == widget.account!.id,
+        orElse: () => data.first,
+      );
+    } else if (data.isNotEmpty) {
+      account = data.firstWhere((a) => a.isMain, orElse: () => data.first);
+    }
+
+    setState(() {
+      accounts = data;
+      selectedAccount = account;
+    });
+  }
 
   void saveOperation() {
+    final amount = double.tryParse(amountController.text);
 
-    final amount = double.tryParse(
-      amountController.text,
-    );
+    final account = selectedAccount;
 
-    if (amount == null) {
+    if (amount == null || account == null) {
       return;
     }
 
-
-    final operation = Operation(
-
-      id: DateTime.now()
-          .millisecondsSinceEpoch
-          .toString(),
+    final operation = model.Operation(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
 
       date: DateTime.now(),
 
@@ -44,130 +69,100 @@ class _AddOperationScreenState extends State<AddOperationScreen> {
 
       comment: commentController.text,
 
+      accountId: account.id,
     );
 
-
-    Navigator.pop(
-      context,
-      operation,
-    );
+    Navigator.pop(context, operation);
   }
-
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-
-      appBar: AppBar(
-        title: const Text(
-          'Добавить операцию',
-        ),
-      ),
-
+      appBar: AppBar(title: const Text('Добавить операцию')),
 
       body: Padding(
-
         padding: const EdgeInsets.all(16),
 
         child: Column(
-
           children: [
-
-
             TextField(
-
               controller: amountController,
 
-              keyboardType:
-                  TextInputType.number,
+              keyboardType: TextInputType.number,
 
               decoration: const InputDecoration(
                 labelText: 'Сумма',
                 suffixText: '₽',
               ),
-
             ),
 
-
             const SizedBox(height: 16),
-
 
             DropdownButton<OperationType>(
+              value: type,
 
-            value: type,
+              items: const [
+                DropdownMenuItem(
+                  value: OperationType.expense,
+                  child: Text('Расход'),
+                ),
 
-            items: const [
+                DropdownMenuItem(
+                  value: OperationType.income,
+                  child: Text('Доход'),
+                ),
+              ],
 
-              DropdownMenuItem(
-                value: OperationType.expense,
-                child: Text('Расход'),
-              ),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    type = value;
+                  });
+                }
+              },
+            ),
 
-              DropdownMenuItem(
-                value: OperationType.income,
-                child: Text('Доход'),
-              ),
+            DropdownButton<Account>(
+              value: selectedAccount,
 
-            ],
+              hint: const Text('Выберите счёт'),
 
-            onChanged: (value) {
+              items: accounts.map((account) {
+                return DropdownMenuItem(
+                  value: account,
+                  child: Text(account.name),
+                );
+              }).toList(),
 
-              if (value != null) {
-
+              onChanged: (value) {
                 setState(() {
-                  type = value;
+                  selectedAccount = value;
                 });
-
-              }
-
-            },
-
-          ),
-
+              },
+            ),
 
             const SizedBox(height: 16),
 
-
             TextField(
-
               controller: commentController,
 
-              decoration: const InputDecoration(
-                labelText: 'Комментарий',
-              ),
-
+              decoration: const InputDecoration(labelText: 'Комментарий'),
             ),
-
 
             const SizedBox(height: 30),
 
-
             SizedBox(
-
               width: double.infinity,
 
               child: ElevatedButton(
-
                 onPressed: saveOperation,
 
-                child: const Text(
-                  'Сохранить',
-                ),
-
+                child: const Text('Сохранить'),
               ),
-
             ),
-
-
           ],
-
         ),
-
       ),
-
     );
-
   }
-
 }

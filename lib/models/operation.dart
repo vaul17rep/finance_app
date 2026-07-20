@@ -21,6 +21,8 @@ class Operation {
 
   final String? receiptId;
 
+  final String? accountId;
+
   final String? regularity;
 
   final bool? workDay;
@@ -40,6 +42,7 @@ class Operation {
     this.categoryId,
     this.paymentType,
     this.receiptId,
+    this.accountId,
     this.regularity,
     this.workDay,
     this.plannedAmount,
@@ -58,6 +61,7 @@ class Operation {
       'categoryId': categoryId,
       'paymentType': paymentType,
       'receiptId': receiptId,
+      'accountId': accountId,
       'regularity': regularity,
       'workDay': workDay == null ? null : (workDay! ? 1 : 0),
       'plannedAmount': plannedAmount,
@@ -77,6 +81,7 @@ class Operation {
       categoryId: map['categoryId'] as String?,
       paymentType: map['paymentType'] as String?,
       receiptId: map['receiptId'] as String?,
+      accountId: map['accountId'] as String?,
       regularity: map['regularity'] as String?,
       workDay: map['workDay'] == null ? null : (map['workDay'] as int) == 1,
       plannedAmount: map['plannedAmount'] == null
@@ -97,6 +102,7 @@ class Operation {
     String? categoryId,
     String? paymentType,
     String? receiptId,
+    String? accountId,
     String? regularity,
     bool? workDay,
     double? plannedAmount,
@@ -113,6 +119,7 @@ class Operation {
       categoryId: categoryId ?? this.categoryId,
       paymentType: paymentType ?? this.paymentType,
       receiptId: receiptId ?? this.receiptId,
+      accountId: accountId ?? this.accountId,
       regularity: regularity ?? this.regularity,
       workDay: workDay ?? this.workDay,
       plannedAmount: plannedAmount ?? this.plannedAmount,

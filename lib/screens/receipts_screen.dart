@@ -156,11 +156,7 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
         shop: result.shop,
 
-        amount: double.parse(
-          result.items
-              .fold(0.0, (sum, item) => sum + item.total)
-              .toStringAsFixed(2),
-        ),
+        amount: result.totalAmount,
 
         photoPath: savedPhotoPath,
 

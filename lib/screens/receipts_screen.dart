@@ -8,7 +8,10 @@ import 'package:flutter/foundation.dart';
 import '../models/receipt.dart';
 import '../repositories/receipt_repository.dart';
 import '../services/openrouter_service.dart';
-import '../secrets.dart';
+import '../ai/ai_profiles.dart';
+import '../ai/ai_profile.dart';
+import '../models/parsed_receipt.dart';
+
 import '../services/photo_storage_service.dart';
 import '../models/receipt_item.dart';
 import 'receipt_details_screen.dart';
@@ -16,6 +19,10 @@ import '../models/operation.dart';
 import '../models/operation_type.dart';
 import '../repositories/operation_repository.dart';
 import 'widgets/select_account_dialog.dart';
+import '../debug/debug_logger.dart';
+import 'package:flutter/services.dart';
+import '../ai/ai_limit_exception.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
@@ -33,6 +40,7 @@ class ReceiptsScreen extends StatefulWidget {
 class _ReceiptsScreenState extends State<ReceiptsScreen> {
   final ReceiptRepository repository = ReceiptRepository();
   final OperationRepository operationRepository = OperationRepository();
+  AiProfile selectedProfile = AiProfiles.free;
 
   final ImagePicker picker = ImagePicker();
 
@@ -46,6 +54,8 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
 
     loadReceipts();
   }
+
+  final uuid = Uuid();
 
   Future<void> loadReceipts() async {
     print("START LOAD RECEIPTS");
@@ -95,7 +105,41 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
     );
   }
 
+  Future<bool?> showAiLimitDialog(int tokens) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Лимит AI'),
+
+          content: Text(
+            'Бесплатный AI не может выполнить такой запрос.\n\n'
+            'Доступно токенов: $tokens\n\n'
+            'Что сделать?',
+          ),
+
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context, false);
+              },
+              child: const Text('Использовать лимит'),
+            ),
+
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context, true);
+              },
+              child: const Text('Перейти на платный AI'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> addReceipt() async {
+    DebugLogger.log("START ADD RECEIPT");
     setState(() {
       loadingCount++;
     });
@@ -118,6 +162,8 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
       return;
     }
 
+    DebugLogger.log("IMAGE SELECTED: ${image.path}");
+
     final savedPhotoPath = await PhotoStorageService.savePhoto(
       File(image.path),
     );
@@ -134,118 +180,252 @@ class _ReceiptsScreenState extends State<ReceiptsScreen> {
     }
 
     final bytes = compressed;
-
+    DebugLogger.log("IMAGE COMPRESSED: ${bytes.length} bytes");
     final base64 = await compute(encodeImage, bytes);
+    DebugLogger.log("BASE64 SIZE: ${base64.length}");
+    final service = OpenRouterService(profile: selectedProfile);
 
-    final service = OpenRouterService(apiKey: Secrets.openRouterApiKey);
+    DebugLogger.log("AI PROFILE: ${selectedProfile.name}");
+    ParsedReceipt result;
 
     try {
-      final result = await service.analyzeReceipt(base64);
+      result = await service.analyzeReceipt(base64);
+    } on AiLimitException catch (e) {
+      final usePaid = await showAiLimitDialog(e.availableTokens);
 
-      final account = await showSelectAccountDialog(context);
+      if (usePaid == true) {
+        final paidService = OpenRouterService(profile: AiProfiles.paid);
 
-      if (account == null) {
+        result = await paidService.analyzeReceipt(base64);
+      } else if (usePaid == false) {
+        final limitedService = OpenRouterService(
+          profile: selectedProfile,
+          maxTokens: e.availableTokens,
+        );
+
+        result = await limitedService.analyzeReceipt(base64);
+      } else {
         return;
       }
-
-      print("МАГАЗИН:");
-      print(result.shop);
-
-      print("ТОВАРОВ:");
-      print(result.items.length);
-
-      final receipt = Receipt(
-        id: 'CHK-${DateTime.now().millisecondsSinceEpoch}',
-
-        date: result.date ?? DateTime.now(),
-
-        time: result.time,
-
-        shop: result.shop,
-
-        amount: result.totalAmount,
-
-        photoPath: savedPhotoPath,
-
-        status: 'DONE',
-
-        comment: result.paymentType,
-      );
-
-      final items = result.items.map((item) {
-        return ReceiptItem(
-          id: 'ITEM-${DateTime.now().millisecondsSinceEpoch}-${item.name}',
-
-          receiptId: receipt.id,
-
-          name: item.name,
-
-          category: item.category,
-
-          quantity: item.quantity,
-
-          unit: item.unit,
-
-          price: item.price,
-
-          total: item.total,
-
-          priceBeforeDiscount: item.priceBeforeDiscount,
-
-          comment: item.comment,
-        );
-      }).toList();
-
-      await repository.insertReceiptWithItems(receipt, items);
-
-      final operation = Operation(
-        id: 'OP-${DateTime.now().millisecondsSinceEpoch}',
-
-        type: OperationType.expense,
-
-        amount: receipt.amount,
-
-        comment: receipt.comment ?? '',
-
-        date: receipt.date,
-
-        shop: receipt.shop,
-
-        paymentType: result.paymentType,
-
-        receiptId: receipt.id,
-
-        accountId: account.id,
-
-        categoryId: 'food',
-
-        article: null,
-
-        regularity: null,
-
-        workDay: null,
-
-        plannedAmount: null,
-
-        processed: false,
-      );
-
-      await operationRepository.insertOperation(operation);
-
-      await loadReceipts();
     } catch (e) {
-      print("ОШИБКА: $e");
-    } finally {
+      DebugLogger.log("ERROR: $e");
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))),
+        );
+      }
+
+      return;
+    }
+
+    DebugLogger.log("AI SUCCESS ITEMS: ${result.items.length}");
+
+    DebugLogger.log("AI SHOP: ${result.shop}");
+
+    final account = await showSelectAccountDialog(context);
+
+    if (account == null) {
       setState(() {
         loadingCount--;
       });
+      return;
     }
+
+    final receipt = Receipt(
+      id: 'CHK-${DateTime.now().millisecondsSinceEpoch}',
+
+      date: result.date ?? DateTime.now(),
+
+      time: result.time,
+
+      shop: result.shop,
+
+      amount: result.totalAmount,
+
+      photoPath: savedPhotoPath,
+
+      status: 'DONE',
+
+      comment: result.paymentType,
+    );
+
+    final items = result.items.map((item) {
+      return ReceiptItem(
+        id: uuid.v4(),
+
+        receiptId: receipt.id,
+
+        name: item.name,
+
+        category: item.category,
+
+        quantity: item.quantity,
+
+        unit: item.unit,
+
+        price: item.price,
+
+        total: item.total,
+
+        priceBeforeDiscount: item.priceBeforeDiscount,
+
+        comment: item.comment,
+      );
+    }).toList();
+
+    await repository.insertReceiptWithItems(receipt, items);
+
+    final operation = Operation(
+      id: 'OP-${DateTime.now().millisecondsSinceEpoch}',
+
+      type: OperationType.expense,
+
+      amount: receipt.amount,
+
+      comment: receipt.comment ?? '',
+
+      date: receipt.date,
+
+      shop: receipt.shop,
+
+      paymentType: result.paymentType,
+
+      receiptId: receipt.id,
+
+      accountId: account.id,
+
+      categoryId: 'food',
+
+      article: null,
+
+      regularity: null,
+
+      workDay: null,
+
+      plannedAmount: null,
+
+      processed: false,
+    );
+
+    await operationRepository.insertOperation(operation);
+
+    await loadReceipts();
+
+    setState(() {
+      loadingCount--;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Чеки')),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Text('Чеки'),
+
+            const SizedBox(width: 10),
+
+            DropdownButton<AiProfile>(
+              value: selectedProfile,
+
+              underline: const SizedBox(),
+
+              items: AiProfiles.all.map((profile) {
+                return DropdownMenuItem(
+                  value: profile,
+                  child: Text(profile.name),
+                );
+              }).toList(),
+
+              onChanged: (profile) {
+                if (profile == null) return;
+
+                setState(() {
+                  selectedProfile = profile;
+                });
+              },
+            ),
+          ],
+        ),
+
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report, color: Colors.red),
+
+            onPressed: () {
+              showDialog(
+                context: context,
+
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text('AI DEBUG'),
+
+                    content: SizedBox(
+                      width: double.maxFinite,
+                      height: 400,
+
+                      child: ValueListenableBuilder<List<String>>(
+                        valueListenable: DebugLogger.logs,
+
+                        builder: (context, logs, _) {
+                          if (logs.isEmpty) {
+                            return const Text("Логов пока нет");
+                          }
+
+                          return ListView.builder(
+                            itemCount: logs.length,
+
+                            itemBuilder: (context, index) {
+                              return Text(
+                                logs[index],
+                                style: const TextStyle(fontSize: 12),
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    actions: [
+                      TextButton(
+                        onPressed: () async {
+                          final text = DebugLogger.logs.value.join("\n");
+
+                          await Clipboard.setData(ClipboardData(text: text));
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Лог скопирован")),
+                          );
+                        },
+
+                        child: const Text("Копировать"),
+                      ),
+
+                      TextButton(
+                        onPressed: () {
+                          DebugLogger.clear();
+                        },
+
+                        child: const Text("Очистить"),
+                      ),
+
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+
+                        child: const Text("Закрыть"),
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
 
       body: RefreshIndicator(
         onRefresh: loadReceipts,

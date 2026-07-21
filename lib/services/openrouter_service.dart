@@ -4,20 +4,33 @@ import 'package:http/http.dart' as http;
 import '../models/parsed_receipt.dart';
 import '../models/receipt_item.dart';
 import 'package:flutter/foundation.dart';
+import '../debug/debug_logger.dart';
+import '../ai/ai_profile.dart';
+import '../ai/ai_key_manager.dart';
+import '../ai/ai_limit_exception.dart';
 
 class OpenRouterService {
-  final String apiKey;
+  final AiProfile profile;
 
-  OpenRouterService({required this.apiKey});
+  final int maxTokens;
+
+  OpenRouterService({required this.profile, this.maxTokens = 4000});
 
   Future<ParsedReceipt> analyzeReceipt(String imageBase64) async {
-    print("IMAGE SIZE:");
-    print(imageBase64.length);
+    DebugLogger.log("START AI ANALYZE");
+
+    DebugLogger.log("IMAGE SIZE: ${imageBase64.length}");
+
+    final selectedApiKey = AiKeyManager.getAvailableKey(profile);
+
+    DebugLogger.log("AI PROFILE: ${profile.name}");
+
+    DebugLogger.log("API KEY LENGTH: ${selectedApiKey.length}");
     final response = await http.post(
       Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
 
       headers: {
-        'Authorization': 'Bearer $apiKey',
+        'Authorization': 'Bearer $selectedApiKey',
 
         'Content-Type': 'application/json',
 
@@ -27,11 +40,11 @@ class OpenRouterService {
       },
 
       body: jsonEncode({
-        "model": "openai/gpt-4.1-mini",
+        "model": profile.model,
 
         "temperature": 0,
 
-        "max_tokens": 4000,
+        "max_tokens": maxTokens,
 
         "messages": [
           {
@@ -332,13 +345,33 @@ total_amount должна быть итоговой суммой покупки.
     print("==============================");
     print("OPENROUTER STATUS:");
     print(response.statusCode);
-
+    DebugLogger.log("OPENROUTER STATUS: ${response.statusCode}");
     print("==============================");
     print("RAW RESPONSE:");
     print(response.body);
-
+    DebugLogger.log("RESPONSE LENGTH: ${response.body.length}");
     if (response.statusCode != 200) {
-      throw Exception("OpenRouter error");
+      if (response.statusCode == 429) {
+        AiKeyManager.markFailed(selectedApiKey);
+      }
+
+      if (response.statusCode == 402) {
+        final body = jsonDecode(response.body);
+
+        final message = body["error"]["message"] ?? "";
+
+        final match = RegExp(r'only afford (\d+)').firstMatch(message);
+
+        final available = match != null ? int.parse(match.group(1)!) : 1000;
+
+        throw AiLimitException(available);
+      }
+
+      if (response.statusCode == 401) {
+        throw Exception("Неверный AI ключ");
+      }
+
+      throw Exception("OpenRouter error ${response.statusCode}");
     }
 
     final data = jsonDecode(response.body);

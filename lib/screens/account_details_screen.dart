@@ -10,6 +10,7 @@ import 'widgets/account_card.dart';
 import '../models/operation.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import '../models/operation_type.dart';
 
 class AccountDetailsScreen extends StatefulWidget {
   final Account account;
@@ -53,6 +54,21 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
     });
   }
 
+  String operationName(OperationType type) {
+    switch (type) {
+      case OperationType.income:
+        return 'Доход';
+      case OperationType.expense:
+        return 'Расход';
+      case OperationType.transfer:
+        return 'Перевод';
+      case OperationType.repayment:
+        return 'Погашение';
+      case OperationType.adjustment:
+        return 'Корректировка';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -89,9 +105,13 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
 
           ...operations.map(
             (op) => ListTile(
-              title: Text(op.comment.isEmpty ? op.type.toString() : op.comment),
+              title: Text(
+                op.comment.isEmpty ? operationName(op.type) : op.comment,
+              ),
 
-              trailing: Text("${op.amount} ₽"),
+              trailing: Text(
+                '${op.type == OperationType.expense || op.type == OperationType.repayment || (op.type == OperationType.adjustment && op.amount < 0) ? "-" : "+"}${op.amount.abs().toStringAsFixed(2)} ₽',
+              ),
             ),
           ),
         ],

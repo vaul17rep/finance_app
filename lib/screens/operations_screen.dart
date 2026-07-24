@@ -105,8 +105,12 @@ class _OperationsScreenState extends State<OperationsScreen> {
                       subtitle: Text(operation.date.toString()),
 
                       trailing: Text(
-                        '${operation.type == OperationType.expense ? "-" : "+"}'
-                        '${operation.amount.toStringAsFixed(2)} ₽',
+                        operation.type == OperationType.expense ||
+                                operation.type == OperationType.repayment ||
+                                (operation.type == OperationType.adjustment &&
+                                    operation.amount < 0)
+                            ? '${operation.amount.toStringAsFixed(2)} ₽'
+                            : '+${operation.amount.toStringAsFixed(2)} ₽',
                       ),
                     ),
                   );

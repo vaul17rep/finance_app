@@ -21,6 +21,43 @@ import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import 'account_details_screen.dart';
 import 'widgets/create_account_dialog.dart';
+import 'settings_screen.dart';
+
+class CustomPageScrollPhysics extends PageScrollPhysics {
+  const CustomPageScrollPhysics({super.parent});
+
+  @override
+  CustomPageScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return CustomPageScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    if (velocity.abs() < toleranceFor(position).velocity) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+
+    final currentPage = position.pixels / position.viewportDimension;
+
+    final pagesToMove = (velocity / 1300).round();
+
+    final targetPage = (currentPage + pagesToMove).clamp(
+      0,
+      position.maxScrollExtent / position.viewportDimension,
+    );
+
+    return ScrollSpringSimulation(
+      const SpringDescription(mass: 0.7, stiffness: 2000, damping: 150),
+      position.pixels,
+      targetPage * position.viewportDimension,
+      velocity,
+      tolerance: toleranceFor(position),
+    );
+  }
+}
 
 class HomeScreen extends StatefulWidget {
   final Account? initialAccount;
@@ -39,9 +76,28 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isAutoScrolling = false;
   List<Operation> operations = [];
   final PageController _pageController = PageController(
-    viewportFraction: 0.82,
+    viewportFraction: 0.8,
     initialPage: 0,
   );
+
+  String operationName(OperationType type) {
+    switch (type) {
+      case OperationType.income:
+        return 'Доход';
+
+      case OperationType.expense:
+        return 'Расход';
+
+      case OperationType.transfer:
+        return 'Перевод';
+
+      case OperationType.repayment:
+        return 'Погашение';
+
+      case OperationType.adjustment:
+        return 'Корректировка';
+    }
+  }
 
   final AccountRepository _accountRepository = AccountRepository();
 
@@ -56,6 +112,8 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   FinancialState? financialState;
+
+  Map<String, double> balances = {};
 
   @override
   void initState() {
@@ -134,13 +192,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> loadData() async {
     final loadedAccounts = await _accountRepository.getAccounts();
 
-    final updatedAccounts = await Future.wait(
-      loadedAccounts.map((account) async {
-        final state = await _financialService.getState(account: account);
+    final calculatedBalances = <String, double>{};
 
-        return account;
-      }),
-    );
+    for (final account in loadedAccounts) {
+      final state = await _financialService.getState(account: account);
+      calculatedBalances[account.id] = state.balance;
+    }
+
+    final updatedAccounts = loadedAccounts;
+
     if (widget.initialAccount != null) {
       final account = loadedAccounts.firstWhere(
         (e) => e.id == widget.initialAccount!.id,
@@ -154,6 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         accounts = updatedAccounts;
+        balances = calculatedBalances;
         selectedAccount = account;
         operations = loadedOperations;
         financialState = state;
@@ -166,6 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mainAccount == null) {
       setState(() {
         accounts = updatedAccounts;
+        balances = calculatedBalances;
         selectedAccount = null;
         operations = [];
         financialState = FinancialState(balance: 0, income: 0, expenses: 0);
@@ -182,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() {
       accounts = updatedAccounts;
+      balances = calculatedBalances;
       selectedAccount = mainAccount;
       operations = loadedOperations;
       financialState = state;
@@ -240,6 +303,19 @@ class _HomeScreenState extends State<HomeScreen> {
           'Finance App',
           style: AppTextStyles.title.copyWith(fontSize: 26, letterSpacing: 1.5),
         ),
+
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
+        ],
       ),
 
       body: RefreshIndicator(
@@ -253,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
               height: cardWidth / AccountCard.aspectRatio,
 
               child: PageView.builder(
-                physics: const ClampingScrollPhysics(),
+                physics: const CustomPageScrollPhysics(),
                 allowImplicitScrolling: true,
                 controller: _pageController,
                 clipBehavior: Clip.none,
@@ -432,9 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                     child: AccountCard(
                                       account: account,
-                                      balance: account.id == selectedAccount?.id
-                                          ? (financialState?.balance ?? 0)
-                                          : account.balance,
+                                      balance: balances[account.id] ?? 0,
                                       width: cardWidth,
                                     ),
                                   ),
@@ -445,7 +519,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                   child: AccountCard(
                                     account: account,
-                                    balance: account.balance,
+                                    balance: balances[account.id] ?? 0,
                                     width: cardWidth,
                                   ),
                                 ),
@@ -464,9 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                                   child: AccountCard(
                                     account: account,
-                                    balance: account.id == selectedAccount?.id
-                                        ? (financialState?.balance ?? 0)
-                                        : account.balance,
+                                    balance: balances[account.id] ?? 0,
                                     width: cardWidth,
                                   ),
                                 ),
@@ -624,8 +696,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   subtitle: Text(op.type.toString()),
 
                   trailing: Text(
-                    '${op.type == OperationType.expense ? "-" : "+"}'
-                    '${op.amount.toStringAsFixed(2)} ₽',
+                    '${op.type == OperationType.expense || op.type == OperationType.repayment || (op.type == OperationType.adjustment && op.amount < 0) ? "-" : "+"}${op.amount.abs().toStringAsFixed(2)} ₽',
                   ),
                 ),
               ),

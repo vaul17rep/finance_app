@@ -7,6 +7,20 @@ import '../../theme/app_text_styles.dart';
 class AccountCard extends StatelessWidget {
   static const double aspectRatio = 85.6 / 53.98;
 
+  double _getNameFontSize(String name, bool expanded) {
+    if (expanded) {
+      if (name.length > 28) return 16;
+      if (name.length > 18) return 20;
+      return 26;
+    }
+
+    if (name.length > 32) return 13;
+    if (name.length > 22) return 15;
+    if (name.length > 15) return 16;
+
+    return 18;
+  }
+
   final Account account;
   final double balance;
   final double width;
@@ -61,30 +75,19 @@ class AccountCard extends StatelessWidget {
 
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Expanded(
+                      child: Text(
+                        account.name,
 
-                      children: [
-                        Text(
-                          account.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
 
-                          style: AppTextStyles.title.copyWith(
-                            color: Colors.white,
-                            fontSize: expanded ? 26 : null,
-                          ),
+                        style: AppTextStyles.title.copyWith(
+                          color: Colors.white,
+                          fontSize: _getNameFontSize(account.name, expanded),
                         ),
-
-                        Text(
-                          account.isMain ? "Основной счёт" : "Счёт",
-
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
 
                     if (account.isMain)

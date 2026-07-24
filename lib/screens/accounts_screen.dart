@@ -3,9 +3,16 @@ import 'package:flutter/material.dart';
 import '../models/account.dart';
 import '../repositories/account_repository.dart';
 import '../repositories/operation_repository.dart';
-import '../domain/services/account_balance_service.dart';
 import 'home_screen.dart';
 import 'widgets/create_account_dialog.dart';
+import '../utils/account_name_utils.dart';
+import 'package:uuid/uuid.dart';
+
+import '../models/operation.dart';
+import '../models/operation_type.dart';
+import '../domain/services/financial_service.dart';
+import '../domain/services/financial_calculator.dart';
+import '../domain/entities/financial_state.dart';
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
@@ -18,9 +25,14 @@ class _AccountsScreenState extends State<AccountsScreen> {
   final AccountRepository repository = AccountRepository();
   final OperationRepository operationRepository = OperationRepository();
 
-  final AccountBalanceService balanceService = AccountBalanceService();
+  late final FinancialService financialService = FinancialService(
+    operationRepository,
+    FinancialCalculator(),
+  );
 
   List<Account> accounts = [];
+
+  Map<String, double> balances = {};
 
   @override
   void initState() {
@@ -31,26 +43,26 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
   Future<void> editBalance(Account account) async {
     final controller = TextEditingController(
-      text: account.balance.toStringAsFixed(2),
+      text: (balances[account.id] ?? 0).toStringAsFixed(2),
     );
 
     final value = await showDialog<double>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Изменить баланс'),
+          title: const Text('Скорректировать баланс'),
 
           content: TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(hintText: 'Например: 1500.50'),
+            decoration: const InputDecoration(
+              hintText: 'Введите текущий баланс',
+            ),
           ),
 
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Отмена'),
             ),
 
@@ -73,7 +85,22 @@ class _AccountsScreenState extends State<AccountsScreen> {
       return;
     }
 
-    await repository.updateAccount(account.copyWith(initialBalance: value));
+    final difference = value - (balances[account.id] ?? 0);
+
+    if (difference.abs() < 0.01) {
+      return;
+    }
+
+    final operation = Operation(
+      id: const Uuid().v4(),
+      type: OperationType.adjustment,
+      amount: difference,
+      comment: 'Корректировка баланса',
+      date: DateTime.now(),
+      accountId: account.id,
+    );
+
+    await operationRepository.insertOperation(operation);
 
     await loadAccounts();
   }
@@ -88,7 +115,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
         return AlertDialog(
           title: const Text('Изменить название'),
 
-          content: TextField(controller: controller),
+          content: TextField(controller: controller, maxLength: 40),
 
           actions: [
             TextButton(
@@ -101,7 +128,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
             TextButton(
               onPressed: () {
-                Navigator.pop(context, controller.text.trim());
+                Navigator.pop(
+                  context,
+                  processAccountName(controller.text.trim()),
+                );
               },
 
               child: const Text('Сохранить'),
@@ -167,16 +197,16 @@ class _AccountsScreenState extends State<AccountsScreen> {
   Future<void> loadAccounts() async {
     final result = await repository.getAccounts();
 
-    final operations = await operationRepository.getOperations();
+    final calculatedBalances = <String, double>{};
 
-    final updated = result.map((account) {
-      final balance = balanceService.calculate(account, operations);
-
-      return account.copyWith(balance: balance);
-    }).toList();
+    for (final account in result) {
+      final state = await financialService.getState(account: account);
+      calculatedBalances[account.id] = state.balance;
+    }
 
     setState(() {
-      accounts = updated;
+      accounts = result;
+      balances = calculatedBalances;
     });
   }
 
@@ -261,7 +291,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                 const SizedBox(height: 6),
 
                                 Text(
-                                  '${account.balance.toStringAsFixed(2)} ₽',
+                                  '${(balances[account.id] ?? 0).toStringAsFixed(2)} ₽',
                                   style: const TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,

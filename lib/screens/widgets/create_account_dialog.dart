@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/account.dart';
+import '../../utils/account_name_utils.dart';
 
 Future<Account?> showCreateAccountDialog(
   BuildContext context, {
@@ -26,6 +27,9 @@ Future<Account?> showCreateAccountDialog(
                 children: [
                   TextField(
                     controller: nameController,
+
+                    maxLength: 40,
+
                     decoration: const InputDecoration(
                       labelText: 'Название счёта',
                     ),
@@ -87,7 +91,7 @@ Future<Account?> showCreateAccountDialog(
               ),
               FilledButton(
                 onPressed: () {
-                  final name = nameController.text.trim();
+                  final name = processAccountName(nameController.text.trim());
 
                   if (name.isEmpty) {
                     return;
@@ -100,7 +104,7 @@ Future<Account?> showCreateAccountDialog(
                     Account(
                       id: const Uuid().v4(),
                       name: name,
-                      balance: balance,
+                      balance: 0,
                       initialBalance: balance,
                       isMain: isMain,
                       type: selectedType,

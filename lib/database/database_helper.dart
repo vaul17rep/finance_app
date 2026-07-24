@@ -219,37 +219,6 @@ CREATE TABLE operations (
 
     await db.transaction((txn) async {
       await txn.insert('operations', operation);
-
-      final accountId = operation['accountId'];
-
-      if (accountId == null) {
-        return;
-      }
-
-      final amount = operation['amount'] as double;
-      final type = operation['type'];
-
-      if (type == 'income') {
-        await txn.rawUpdate(
-          '''
-        UPDATE accounts
-        SET balance = balance + ?
-        WHERE id = ?
-        ''',
-          [amount, accountId],
-        );
-      }
-
-      if (type == 'expense') {
-        await txn.rawUpdate(
-          '''
-        UPDATE accounts
-        SET balance = balance - ?
-        WHERE id = ?
-        ''',
-          [amount, accountId],
-        );
-      }
     });
   }
 
@@ -318,7 +287,23 @@ CREATE TABLE operations (
   Future<void> deleteOperation(String id) async {
     final db = await database;
 
-    await db.delete('operations', where: 'id = ?', whereArgs: [id]);
+    await db.transaction((txn) async {
+      final result = await txn.query(
+        'operations',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (result.isEmpty) {
+        return;
+      }
+
+      final operation = result.first;
+
+      final accountId = operation['accountId'];
+
+      await txn.delete('operations', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   // ============================================

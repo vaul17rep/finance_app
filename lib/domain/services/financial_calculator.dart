@@ -8,27 +8,36 @@ class FinancialCalculator {
     double income = 0;
     double expense = 0;
 
+    double balance = account.initialBalance;
+
     for (final operation in operations) {
       switch (operation.type) {
         case OperationType.income:
           income += operation.amount;
+          balance += operation.amount;
           break;
 
         case OperationType.expense:
           expense += operation.amount;
-          break;
-
-        case OperationType.transfer:
+          balance -= operation.amount;
           break;
 
         case OperationType.repayment:
           expense += operation.amount;
+          balance -= operation.amount;
+          break;
+
+        case OperationType.adjustment:
+          balance += operation.amount;
+          break;
+
+        case OperationType.transfer:
           break;
       }
     }
 
     return FinancialState(
-      balance: account.initialBalance + income - expense,
+      balance: balance,
       income: income,
       expenses: expense,
     );

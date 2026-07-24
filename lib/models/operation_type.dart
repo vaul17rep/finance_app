@@ -1,1 +1,1 @@
-enum OperationType { expense, income, transfer, repayment }
+enum OperationType { expense, income, transfer, repayment, adjustment }

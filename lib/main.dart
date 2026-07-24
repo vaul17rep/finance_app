@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'database/database_helper.dart';
-import 'screens/home_screen.dart';
-import 'theme/app_theme.dart';
+import 'data/database/database_helper.dart';
+import 'core/theme/app_theme.dart';
+import 'features/navigation/main_navigation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +32,7 @@ class FinanceApp extends StatelessWidget {
 
       theme: AppTheme.lightTheme,
 
-      home: const HomeScreen(),
+      home: const MainNavigation(),
     );
   }
 }

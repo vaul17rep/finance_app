@@ -7,6 +7,8 @@ class Receipt {
 
   final String shop;
 
+  final String? address;
+
   final String? paymentType;
 
   final double amount;
@@ -23,6 +25,7 @@ class Receipt {
     required this.date,
     required this.time,
     required this.shop,
+    required this.address,
     this.paymentType,
     required this.amount,
     this.photoPath,
@@ -47,6 +50,8 @@ class Receipt {
       'time': time,
 
       'shop': shop,
+
+      'address': address,
 
       'paymentType': paymentType,
 
@@ -84,6 +89,8 @@ class Receipt {
 
       shop: map['shop'] as String,
 
+      address: map['address'] as String?,
+
       paymentType:
         map['paymentType'] as String?,
 
@@ -115,6 +122,8 @@ class Receipt {
 
     String? shop,
 
+    String? address,
+
     String? paymentType,
 
     double? amount,
@@ -136,6 +145,8 @@ class Receipt {
       time: time ?? this.time,
 
       shop: shop ?? this.shop,
+
+      address: address ?? this.address,
 
       paymentType:
         paymentType ?? this.paymentType,

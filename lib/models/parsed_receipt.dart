@@ -8,7 +8,11 @@ class ParsedReceipt {
 
   final String shop;
 
+  final String? address;
+
   final String paymentType;
+
+  final String comment;
 
   final List<ReceiptItem> items;
 
@@ -21,7 +25,11 @@ class ParsedReceipt {
 
     required this.shop,
 
+    required this.address,
+
     required this.paymentType,
+
+    required this.comment,
 
     required this.items,
 
@@ -41,6 +49,8 @@ class ParsedReceipt {
       time: time,
 
       shop: shop,
+
+      address: address,
 
       paymentType: paymentType,
 

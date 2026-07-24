@@ -1,7 +1,7 @@
 class Account {
   final String id;
   final String name;
-  final double balance;
+  final double? balance;
   final double initialBalance;
   final bool isMain;
   final String type;
@@ -10,7 +10,7 @@ class Account {
   Account({
     required this.id,
     required this.name,
-    required this.balance,
+    this.balance,
     this.initialBalance = 0,
     required this.isMain,
     this.type = 'other',
@@ -33,7 +33,9 @@ class Account {
     return Account(
       id: map['id'] as String,
       name: map['name'] as String,
-      balance: (map['balance'] as num).toDouble(),
+      balance: map['balance'] == null
+    ? null
+    : (map['balance'] as num).toDouble(),
       initialBalance: (map['initialBalance'] ?? map['balance'] ?? 0).toDouble(),
       isMain: (map['isMain'] ?? 0) == 1,
       type: map['type'] as String? ?? 'other',

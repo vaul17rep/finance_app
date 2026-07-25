@@ -9,6 +9,7 @@ import 'add_operation_screen.dart';
 import 'dart:async';
 import 'widgets/operation_tile.dart';
 import '../../models/operation_type.dart';
+import '../../core/theme/app_dimensions.dart';
 
 class PendingDelete {
   final Operation operation;
@@ -38,30 +39,46 @@ class _OperationsScreenState extends State<OperationsScreen> {
 
   OperationFilter filter = OperationFilter.all;
 
+  void _previousFilter() {
+    const filters = OperationFilter.values;
+    final currentIndex = filters.indexOf(filter);
+    final newIndex = (currentIndex - 1 + filters.length) % filters.length;
+    setState(() {
+      filter = filters[newIndex];
+      updateFilteredOperations();
+    });
+  }
+
+  void _nextFilter() {
+    const filters = OperationFilter.values;
+    final currentIndex = filters.indexOf(filter);
+    final newIndex = (currentIndex + 1) % filters.length;
+    setState(() {
+      filter = filters[newIndex];
+      updateFilteredOperations();
+    });
+  }
+
   void updateFilteredOperations() {
     switch (filter) {
       case OperationFilter.all:
         filteredOperations = List.from(operations);
         break;
-
       case OperationFilter.receipts:
         filteredOperations = operations
             .where((e) => e.receiptId != null)
             .toList();
         break;
-
       case OperationFilter.operations:
         filteredOperations = operations
             .where((e) => e.receiptId == null)
             .toList();
         break;
-
       case OperationFilter.income:
-        filteredOperations = operations.where((e) {
-          return e.type == OperationType.income;
-        }).toList();
+        filteredOperations = operations
+            .where((e) => e.type == OperationType.income)
+            .toList();
         break;
-
       case OperationFilter.expenses:
         filteredOperations = operations.where((e) {
           return e.type == OperationType.expense ||
@@ -74,14 +91,11 @@ class _OperationsScreenState extends State<OperationsScreen> {
 
   void restoreOperation(PendingDelete item) {
     item.timer?.cancel();
-
     pendingDeletes.remove(item);
-
     setState(() {
       final index = item.index <= operations.length
           ? item.index
           : operations.length;
-
       operations.insert(index, item.operation);
       operations.sort((a, b) => b.date.compareTo(a.date));
       updateFilteredOperations();
@@ -91,156 +105,151 @@ class _OperationsScreenState extends State<OperationsScreen> {
   @override
   void initState() {
     super.initState();
-
     loadOperations();
   }
 
   Future<void> loadOperations() async {
     final result = await repository.getOperations();
-
     result.sort((a, b) => b.date.compareTo(a.date));
-
     setState(() {
       operations = result;
-
       updateFilteredOperations();
     });
   }
 
   Widget _filterButton(String text, OperationFilter value) {
     final selected = filter == value;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Padding(
       padding: const EdgeInsets.only(right: 8),
-
       child: ChoiceChip(
-        label: Text(text),
-
+        label: Text(
+          text,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: selected
+                ? colorScheme.onPrimary
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
         selected: selected,
-
+        selectedColor: colorScheme.primary,
+        backgroundColor: colorScheme.surfaceVariant,
+        showCheckmark: false,
         onSelected: (_) {
           setState(() {
             filter = value;
             updateFilteredOperations();
           });
         },
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          side: BorderSide(
+            color: selected ? colorScheme.primary : Colors.transparent,
+            width: 1,
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Операции')),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Операции'),
+        backgroundColor: Colors.transparent,
+      ),
       body: Stack(
         children: [
           Column(
             children: [
               SizedBox(
                 height: 55,
-
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-
                   children: [
                     _filterButton('📋 Все', OperationFilter.all),
-
                     _filterButton('🧾 Чеки', OperationFilter.receipts),
-
                     _filterButton('✏️ Вручную', OperationFilter.operations),
-
                     _filterButton('💰 Доходы', OperationFilter.income),
-
                     _filterButton('💸 Расходы', OperationFilter.expenses),
                   ],
                 ),
               ),
-
               Expanded(
                 child: operations.isEmpty
-                    ? const Center(child: Text('Операций нет'))
+                    ? Center(
+                        child: Text(
+                          'Операций нет',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      )
                     : RefreshIndicator(
                         onRefresh: loadOperations,
-
                         child: ListView.builder(
                           itemCount: filteredOperations.length,
-
                           itemBuilder: (context, index) {
                             final operation = filteredOperations[index];
-
                             return Dismissible(
                               key: Key(operation.id),
-
                               direction: DismissDirection.endToStart,
-
                               background: Container(
-                                color: Colors.red,
-
+                                color: colorScheme.error,
                                 alignment: Alignment.centerRight,
-
                                 padding: const EdgeInsets.only(right: 20),
-
-                                child: const Icon(Icons.delete),
+                                child: Icon(
+                                  Icons.delete,
+                                  color: colorScheme.onError,
+                                ),
                               ),
-
                               onDismissed: (_) {
                                 final deletedOperation = operation;
-
                                 final item = PendingDelete(
                                   operation: deletedOperation,
                                   index: operations.indexWhere(
                                     (e) => e.id == deletedOperation.id,
                                   ),
                                 );
-
                                 setState(() {
                                   operations.removeWhere(
                                     (e) => e.id == deletedOperation.id,
                                   );
-
                                   updateFilteredOperations();
-
                                   pendingDeletes.insert(0, item);
-
                                   if (pendingDeletes.length > 3) {
                                     pendingDeletes.removeLast();
                                   }
                                 });
-
                                 item.timer = Timer(
                                   const Duration(seconds: 5),
-
                                   () async {
-                                    if (!pendingDeletes.contains(item)) {
-                                      return;
-                                    }
-
+                                    if (!pendingDeletes.contains(item)) return;
                                     pendingDeletes.remove(item);
-
                                     await repository.deleteOperation(
                                       deletedOperation.id,
                                     );
-
                                     if (mounted) {
-                                      setState(() {
-                                        updateFilteredOperations();
-                                      });
+                                      setState(
+                                        () => updateFilteredOperations(),
+                                      );
                                     }
                                   },
                                 );
                               },
-
                               child: OperationTile(
                                 operation: operation,
-
                                 onTap: () async {
                                   if (operation.receiptId != null) {
                                     final receipt = await receiptRepository
                                         .getReceiptById(operation.receiptId!);
-
                                     if (receipt != null && context.mounted) {
                                       Navigator.push(
                                         context,
@@ -283,50 +292,49 @@ class _OperationsScreenState extends State<OperationsScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     child: Material(
                       elevation: 8,
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusMedium,
+                      ),
                       color: Colors.transparent,
                       child: Container(
                         height: 60,
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade900.withOpacity(0.75),
-                          borderRadius: BorderRadius.circular(16),
+                          color: colorScheme.surfaceVariant.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(
+                            AppDimensions.radiusMedium,
+                          ),
+                          border: Border.all(
+                            color: colorScheme.primary.withOpacity(0.2),
+                            width: 1,
+                          ),
                         ),
-
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.delete,
-                              color: Colors.white70,
+                              color: colorScheme.error,
                               size: 26,
                             ),
-
                             const SizedBox(width: 12),
-
                             Expanded(
                               child: Text(
                                 item.operation.shop ?? 'Без описания',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 15,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurface,
                                 ),
                               ),
                             ),
-
                             TextButton(
-                              onPressed: () {
-                                restoreOperation(item);
-                              },
-
-                              child: const Text(
-                                'Отменить',
-                                style: TextStyle(
-                                  color: Color.fromARGB(255, 211, 106, 106),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              onPressed: () => restoreOperation(item),
+                              style: TextButton.styleFrom(
+                                foregroundColor: colorScheme.primary,
+                                textStyle: theme.textTheme.labelMedium
+                                    ?.copyWith(fontWeight: FontWeight.w600),
                               ),
+                              child: const Text('Отменить'),
                             ),
                           ],
                         ),
@@ -338,23 +346,53 @@ class _OperationsScreenState extends State<OperationsScreen> {
             ),
         ],
       ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push<Operation>(
-            context,
-
-            MaterialPageRoute(builder: (_) => const AddOperationScreen()),
-          );
-
-          if (result != null) {
-            await repository.insertOperation(result);
-
-            await loadOperations();
-          }
-        },
-
-        child: const Icon(Icons.add),
+      floatingActionButtonLocation: FloatingActionButtonLocation
+          .centerFloat, // если хотите по центру, иначе endFloat
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton.small(
+              heroTag: 'filter_left',
+              shape: const CircleBorder(),
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
+              elevation: 4,
+              onPressed: _previousFilter,
+              child: const Icon(Icons.chevron_left),
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton(
+              heroTag: 'add_operation',
+              shape: const CircleBorder(),
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              elevation: 6,
+              onPressed: () async {
+                final result = await Navigator.push<Operation>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddOperationScreen()),
+                );
+                if (result != null) {
+                  await repository.insertOperation(result);
+                  await loadOperations();
+                }
+              },
+              child: const Icon(Icons.add, size: 30),
+            ),
+            const SizedBox(width: 16),
+            FloatingActionButton.small(
+              heroTag: 'filter_right',
+              shape: const CircleBorder(),
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
+              elevation: 4,
+              onPressed: _nextFilter,
+              child: const Icon(Icons.chevron_right),
+            ),
+          ],
+        ),
       ),
     );
   }

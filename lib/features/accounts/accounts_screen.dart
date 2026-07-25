@@ -5,12 +5,14 @@ import '../../data/repositories/account_repository.dart';
 import '../../data/repositories/operation_repository.dart';
 import 'widgets/create_account_dialog.dart';
 import '../../core/utils/account_name_utils.dart';
+import '../../core/theme/app_dimensions.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/operation.dart';
 import '../../models/operation_type.dart';
 import '../../domain/usecases/financial_service.dart';
 import '../../domain/usecases/financial_calculator.dart';
+import 'account_details_screen.dart'; // ДОБАВИТЬ ИМПОРТ
 
 class AccountsScreen extends StatefulWidget {
   const AccountsScreen({super.key});
@@ -29,13 +31,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
   );
 
   List<Account> accounts = [];
-
   Map<String, double> balances = {};
 
   @override
   void initState() {
     super.initState();
-
     loadAccounts();
   }
 
@@ -47,31 +47,47 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final value = await showDialog<double>(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Скорректировать баланс'),
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
 
+        return AlertDialog(
+          backgroundColor: colorScheme.surface,
+          title: Text(
+            'Скорректировать баланс',
+            style: theme.textTheme.titleLarge,
+          ),
           content: TextField(
             controller: controller,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: 'Введите текущий баланс',
+              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: colorScheme.surfaceVariant,
             ),
           ),
-
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.onSurfaceVariant,
+              ),
               child: const Text('Отмена'),
             ),
-
             TextButton(
               onPressed: () {
                 final parsed = double.tryParse(
                   controller.text.replaceAll(',', '.'),
                 );
-
                 Navigator.pop(context, parsed);
               },
+              style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
               child: const Text('Сохранить'),
             ),
           ],
@@ -79,15 +95,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
       },
     );
 
-    if (value == null) {
-      return;
-    }
+    if (value == null) return;
 
     final difference = value - (balances[account.id] ?? 0);
-
-    if (difference.abs() < 0.01) {
-      return;
-    }
+    if (difference.abs() < 0.01) return;
 
     final operation = Operation(
       id: const Uuid().v4(),
@@ -99,7 +110,6 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
 
     await operationRepository.insertOperation(operation);
-
     await loadAccounts();
   }
 
@@ -108,22 +118,33 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
     final name = await showDialog<String>(
       context: context,
-
       builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+
         return AlertDialog(
-          title: const Text('Изменить название'),
-
-          content: TextField(controller: controller, maxLength: 40),
-
+          backgroundColor: colorScheme.surface,
+          title: Text('Изменить название', style: theme.textTheme.titleLarge),
+          content: TextField(
+            controller: controller,
+            maxLength: 40,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: colorScheme.surfaceVariant,
+            ),
+          ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.onSurfaceVariant,
+              ),
               child: const Text('Отмена'),
             ),
-
             TextButton(
               onPressed: () {
                 Navigator.pop(
@@ -131,7 +152,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   processAccountName(controller.text.trim()),
                 );
               },
-
+              style: TextButton.styleFrom(foregroundColor: colorScheme.primary),
               child: const Text('Сохранить'),
             ),
           ],
@@ -139,9 +160,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
       },
     );
 
-    if (name == null || name.isEmpty) {
-      return;
-    }
+    if (name == null || name.isEmpty) return;
 
     await repository.updateAccount(account.copyWith(name: name));
   }
@@ -149,27 +168,28 @@ class _AccountsScreenState extends State<AccountsScreen> {
   Future<void> deleteAccount(Account account) async {
     final confirm = await showDialog<bool>(
       context: context,
-
       builder: (context) {
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+
         return AlertDialog(
-          title: const Text('Удалить счёт?'),
-
-          content: Text('Удалить "${account.name}"?'),
-
+          backgroundColor: colorScheme.surface,
+          title: Text('Удалить счёт?', style: theme.textTheme.titleLarge),
+          content: Text(
+            'Удалить "${account.name}"?',
+            style: theme.textTheme.bodyMedium,
+          ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context, false);
-              },
-
+              onPressed: () => Navigator.pop(context, false),
+              style: TextButton.styleFrom(
+                foregroundColor: colorScheme.onSurfaceVariant,
+              ),
               child: const Text('Отмена'),
             ),
-
             TextButton(
-              onPressed: () {
-                Navigator.pop(context, true);
-              },
-
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: colorScheme.error),
               child: const Text('Удалить'),
             ),
           ],
@@ -177,32 +197,33 @@ class _AccountsScreenState extends State<AccountsScreen> {
       },
     );
 
-    if (confirm != true) {
-      return;
-    }
+    if (confirm != true) return;
 
     try {
       await repository.deleteAccount(account.id);
       await loadAccounts();
     } catch (e) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(e.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Theme.of(context).colorScheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusMedium),
+          ),
+        ),
+      );
     }
   }
 
   Future<void> loadAccounts() async {
     final result = await repository.getAccounts();
-
     final calculatedBalances = <String, double>{};
-
     for (final account in result) {
       final state = await financialService.getState(account: account);
       calculatedBalances[account.id] = state.balance;
     }
-
     setState(() {
       accounts = result;
       balances = calculatedBalances;
@@ -214,175 +235,195 @@ class _AccountsScreenState extends State<AccountsScreen> {
       context,
       isMain: accounts.isEmpty,
     );
-
-    if (account == null) {
-      return;
-    }
-
-    print("CREATED ACCOUNT: ${account.name}");
+    if (account == null) return;
 
     await repository.insertAccount(account);
-
-    final test = await repository.getAccounts();
-
-    print(test);
-
     await loadAccounts();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Счета')),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Счета'),
+        backgroundColor: Colors.transparent,
+      ),
       body: accounts.isEmpty
-          ? const Center(child: Text('Счетов нет'))
+          ? Center(
+              child: Text(
+                'Счетов нет',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            )
           : ReorderableListView.builder(
               itemCount: accounts.length,
               onReorderItem: (oldIndex, newIndex) async {
                 final updated = List<Account>.from(accounts);
-
                 final moved = updated.removeAt(oldIndex);
-
                 updated.insert(newIndex, moved);
-
-                setState(() {
-                  accounts = updated;
-                });
-
+                setState(() => accounts = updated);
                 await repository.updateAccountsOrder(updated);
               },
               itemBuilder: (context, index) {
                 final account = accounts[index];
-
                 return Card(
                   key: ValueKey(account.id),
                   margin: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 8,
+                    vertical: 6,
                   ),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(
+                      AppDimensions.radiusMedium,
+                    ),
                   ),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(
+                      AppDimensions.radiusMedium,
+                    ),
+                    // ИСПРАВЛЕНО: открываем детали счёта
                     onTap: () {
-                      Navigator.pop(context, account);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AccountDetailsScreen(account: account),
+                        ),
+                      );
                     },
                     child: Padding(
-                      padding: const EdgeInsets.all(18),
+                      padding: const EdgeInsets.all(14),
                       child: Row(
                         children: [
                           CircleAvatar(
+                            radius: 20,
+                            backgroundColor: colorScheme.primary.withOpacity(
+                              0.15,
+                            ),
                             child: Icon(
                               account.isMain
                                   ? Icons.star
                                   : Icons.account_balance_wallet,
+                              size: 24,
+                              color: colorScheme.primary,
                             ),
                           ),
-
-                          const SizedBox(width: 16),
-
+                          const SizedBox(width: 14),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   account.name,
-                                  style: const TextStyle(
-                                    fontSize: 18,
+                                  style: theme.textTheme.titleLarge?.copyWith(
+                                    fontSize: 16,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-
-                                const SizedBox(height: 6),
-
+                                const SizedBox(height: 4),
                                 Text(
                                   '${(balances[account.id] ?? 0).toStringAsFixed(2)} ₽',
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  style: theme.textTheme.headlineMedium
+                                      ?.copyWith(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                 ),
-
                                 if (account.isMain)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 4),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
                                     child: Text(
                                       'Основной счёт',
-                                      style: TextStyle(
-                                        color: Colors.orange,
-                                        fontSize: 12,
-                                      ),
+                                      style: theme.textTheme.labelMedium
+                                          ?.copyWith(
+                                            color: colorScheme.primary,
+                                            fontSize: 11,
+                                          ),
                                     ),
                                   ),
                               ],
                             ),
                           ),
-
                           ReorderableDragStartListener(
                             index: index,
-
-                            child: const Padding(
-                              padding: EdgeInsets.only(right: 8),
-
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 4),
                               child: Icon(
                                 Icons.drag_handle,
-                                color: Colors.grey,
+                                color: colorScheme.onSurfaceVariant.withOpacity(
+                                  0.5,
+                                ),
+                                size: 20,
                               ),
                             ),
                           ),
-
                           PopupMenuButton<String>(
                             onSelected: (value) async {
                               if (value == 'main') {
                                 await repository.setMainAccount(account.id);
-
                                 if (!mounted) return;
-
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
                                       '${account.name} теперь основной счёт',
                                     ),
+                                    backgroundColor: colorScheme.primary,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        AppDimensions.radiusMedium,
+                                      ),
+                                    ),
                                   ),
                                 );
                               }
-
-                              if (value == 'edit') {
-                                await editAccount(account);
-                              }
-
-                              if (value == 'balance') {
+                              if (value == 'edit') await editAccount(account);
+                              if (value == 'balance')
                                 await editBalance(account);
-                              }
-
-                              if (value == 'delete') {
+                              if (value == 'delete')
                                 await deleteAccount(account);
-                              }
-
                               await loadAccounts();
                             },
                             itemBuilder: (context) => [
                               if (!account.isMain)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'main',
-                                  child: Text('Сделать основным'),
+                                  child: Text(
+                                    'Сделать основным',
+                                    style: theme.textTheme.bodyMedium,
+                                  ),
                                 ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'edit',
-                                child: Text('Редактировать'),
+                                child: Text(
+                                  'Редактировать',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
                               ),
-                              const PopupMenuItem(
+                              PopupMenuItem(
                                 value: 'balance',
-                                child: Text('Изменить баланс'),
+                                child: Text(
+                                  'Изменить баланс',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
                               ),
                               if (!account.isMain)
-                                const PopupMenuItem(
+                                PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Удалить'),
+                                  child: Text(
+                                    'Удалить',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.error,
+                                    ),
+                                  ),
                                 ),
                             ],
+                            iconColor: colorScheme.onSurfaceVariant,
                           ),
                         ],
                       ),
@@ -391,11 +432,13 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 );
               },
             ),
-
       floatingActionButton: FloatingActionButton(
         onPressed: addAccount,
-
-        child: const Icon(Icons.add),
+        shape: const CircleBorder(),
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
+        elevation: 4,
+        child: const Icon(Icons.add, size: 30),
       ),
     );
   }

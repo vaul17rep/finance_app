@@ -33,19 +33,14 @@ String encodeImage(Uint8List bytes) {
 
 class ReceiptCreationService {
   static final picker = ImagePicker();
-
   static final receiptRepository = ReceiptRepository();
-
   static final operationRepository = OperationRepository();
-
   static final uuid = Uuid();
-
   static AiProfile selectedProfile = AiProfiles.paid;
 
   static Future<ImageSource?> selectImageSource(BuildContext context) async {
     return showModalBottomSheet<ImageSource>(
       context: context,
-
       builder: (_) {
         return StatefulBuilder(
           builder: (context, setState) {
@@ -54,48 +49,32 @@ class ReceiptCreationService {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(16),
-
                     child: DropdownButton<AiProfile>(
                       value: selectedProfile,
-
                       isExpanded: true,
-
                       items: AiProfiles.all.map((profile) {
                         return DropdownMenuItem(
                           value: profile,
-
                           child: Text(profile.name),
                         );
                       }).toList(),
-
                       onChanged: (profile) {
                         if (profile == null) return;
-
                         setState(() {
                           selectedProfile = profile;
                         });
                       },
                     ),
                   ),
-
                   ListTile(
                     leading: const Icon(Icons.camera_alt),
-
                     title: const Text('Камера'),
-
-                    onTap: () {
-                      Navigator.pop(context, ImageSource.camera);
-                    },
+                    onTap: () => Navigator.pop(context, ImageSource.camera),
                   ),
-
                   ListTile(
                     leading: const Icon(Icons.photo),
-
                     title: const Text('Галерея'),
-
-                    onTap: () {
-                      Navigator.pop(context, ImageSource.gallery);
-                    },
+                    onTap: () => Navigator.pop(context, ImageSource.gallery),
                   ),
                 ],
               ),
@@ -111,31 +90,37 @@ class ReceiptCreationService {
 
     try {
       final source = await selectImageSource(context);
-
       if (source == null) return;
 
       final image = await picker.pickImage(source: source);
+      if (image == null) return;
 
       BackgroundTaskManager.instance.addTask(
         BackgroundTask(
           id: taskId,
           title: "Распознавание чека",
           status: BackgroundTaskStatus.processing,
-          progress: 0.05,
+          progress: 0.0,
           message: "Подготовка изображения",
         ),
       );
 
-      if (image == null) return;
+      await Future.delayed(const Duration(milliseconds: 400));
+      BackgroundTaskManager.instance.updateTask(
+        taskId,
+        progress: 0.15,
+        message: "Сохранение фотографии",
+      );
 
       final savedPhotoPath = await PhotoStorageService.savePhoto(
         File(image.path),
       );
 
+      await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
         taskId,
-        progress: 0.2,
-        message: "Сохранение фотографии",
+        progress: 0.3,
+        message: "Сжатие изображения",
       );
 
       final compressed = await FlutterImageCompress.compressWithFile(
@@ -149,24 +134,26 @@ class ReceiptCreationService {
         throw Exception("Не удалось сжать изображение");
       }
 
+      await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
         taskId,
-        progress: 0.35,
-        message: "Сжатие изображения",
+        progress: 0.4,
+        message: "Кодирование изображения",
       );
 
       final base64 = await compute(encodeImage, compressed);
 
-      final service = OpenRouterService(profile: selectedProfile);
-
+      await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
         taskId,
-        progress: 0.45,
+        progress: 0.5,
         message: "Анализ чека AI",
       );
 
+      final service = OpenRouterService(profile: selectedProfile);
       ParsedReceipt result = await service.analyzeReceipt(base64);
 
+      await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
         taskId,
         progress: 0.75,
@@ -174,76 +161,61 @@ class ReceiptCreationService {
       );
 
       final account = await showSelectAccountDialog(context);
-
-      if (account == null) return;
+      if (account == null) {
+        BackgroundTaskManager.instance.failTask(
+          taskId,
+          message: 'Счёт не выбран',
+        );
+        return;
+      }
 
       final receipt = Receipt(
         id: 'CHK-${DateTime.now().millisecondsSinceEpoch}',
-
         date: result.date ?? DateTime.now(),
-
         time: result.time,
-
         shop: result.shop,
-
         address: result.address,
-
         amount: result.totalAmount,
-
         photoPath: savedPhotoPath,
-
         status: 'DONE',
-
         comment: result.comment,
       );
 
       final items = result.items.map((item) {
         return ReceiptItem(
           id: uuid.v4(),
-
           receiptId: receipt.id,
-
           name: item.name,
-
           category: item.category,
-
           quantity: item.quantity,
-
           unit: item.unit,
-
           price: item.price,
-
           total: item.total,
-
           priceBeforeDiscount: item.priceBeforeDiscount,
-
           comment: item.comment,
         );
       }).toList();
+
+      await Future.delayed(const Duration(milliseconds: 400));
+      BackgroundTaskManager.instance.updateTask(
+        taskId,
+        progress: 0.9,
+        message: "Сохранение в базу",
+      );
 
       await receiptRepository.insertReceiptWithItems(receipt, items);
 
       final operation = Operation(
         id: 'OP-${DateTime.now().millisecondsSinceEpoch}',
-
         type: OperationType.expense,
-
         amount: receipt.amount,
-
         comment: result.comment,
-
         date: receipt.date,
-
         shop: receipt.shop,
-
         paymentType: result.paymentType,
-
         receiptId: receipt.id,
-
         accountId: account.id,
-
         categoryId: 'food',
-
         processed: false,
       );
 
@@ -252,21 +224,20 @@ class ReceiptCreationService {
       BackgroundTaskManager.instance.updateTask(
         taskId,
         status: BackgroundTaskStatus.completed,
-        progress: 1,
+        progress: 1.0,
         message: "Чек готов",
       );
 
-      await Future.delayed(const Duration(seconds: 2));
-
+      await Future.delayed(
+        const Duration(seconds: 3),
+      ); // даём анимации полностью дойти
       BackgroundTaskManager.instance.removeTask(taskId);
     } catch (e) {
-      BackgroundTaskManager.instance.updateTask(
-        taskId,
-        status: BackgroundTaskStatus.failed,
-        message: e.toString(),
-      );
-
+      BackgroundTaskManager.instance.failTask(taskId, message: e.toString());
       DebugLogger.log("RECEIPT ERROR: $e");
+      // Даём время на анимацию покраснения (например, 2 секунды)
+      await Future.delayed(const Duration(seconds: 2));
+      BackgroundTaskManager.instance.removeTask(taskId);
     }
   }
 }

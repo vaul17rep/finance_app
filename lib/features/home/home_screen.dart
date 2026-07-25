@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/operation.dart';
@@ -10,10 +11,9 @@ import '../../domain/entities/financial_state.dart';
 import '../../domain/usecases/financial_calculator.dart';
 import '../../domain/usecases/financial_service.dart';
 
-import '../../core/theme/app_colors.dart';
-import '../../core/theme/app_text_styles.dart';
-
-import '../widgets/active_tasks_panel.dart';
+import '/data/services/background_manager/background_task_manager.dart';
+import '/data/services/background_manager/background_task.dart';
+import '/data/services/background_manager/widgets/task_monitor_floating.dart';
 
 import 'widgets/receipt_floating_button.dart';
 import 'widgets/operation_history_list.dart';
@@ -57,6 +57,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Map<String, double> balances = {};
 
+  // Состояния для кнопки монитора
+  bool _monitorActive = false;
+  bool _hasError = false;
+  Timer? _monitorTimer;
+  Timer? _errorTimer;
+  final Set<String> _shownErrorIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -67,7 +74,97 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     });
 
+    // Слушаем задачи
+    BackgroundTaskManager.instance.tasks.addListener(_onTasksChanged);
+
     loadData();
+  }
+
+  @override
+  void dispose() {
+    BackgroundTaskManager.instance.tasks.removeListener(_onTasksChanged);
+    _monitorTimer?.cancel();
+    _errorTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onTasksChanged() {
+    final tasks = BackgroundTaskManager.instance.tasks.value;
+
+    // Проверяем новые ошибки
+    for (final task in tasks) {
+      if (task.status == BackgroundTaskStatus.failed &&
+          !_shownErrorIds.contains(task.id)) {
+        _shownErrorIds.add(task.id);
+        _showError(task);
+      }
+    }
+
+    // Если задачи есть — активируем кнопку на 2 секунды
+    if (tasks.isNotEmpty) {
+      _activateMonitor();
+    } else {
+      _deactivateMonitor();
+    }
+  }
+
+  void _activateMonitor() {
+    setState(() => _monitorActive = true);
+    _monitorTimer?.cancel();
+    _monitorTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted && !_hasError) {
+        setState(() => _monitorActive = false);
+      }
+    });
+  }
+
+  void _deactivateMonitor() {
+    setState(() {
+      _monitorActive = false;
+      _hasError = false;
+    });
+    _monitorTimer?.cancel();
+    _errorTimer?.cancel();
+    _shownErrorIds.clear();
+  }
+
+  void _showError(BackgroundTask task) {
+    setState(() {
+      _hasError = true;
+      _monitorActive = true; // кнопка активна, пока ошибка видна
+    });
+
+    _errorTimer?.cancel();
+    // Длительность SnackBar — 3 секунды + 300 мс на анимацию исчезновения кнопки
+    _errorTimer = Timer(const Duration(milliseconds: 3300), () {
+      if (mounted) {
+        setState(() {
+          _hasError = false;
+          _monitorActive = false;
+        });
+        _shownErrorIds.remove(task.id);
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          task.message.isNotEmpty ? task.message : 'Ошибка обработки чека',
+        ),
+        backgroundColor: const Color(0xFFE57373),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.only(bottom: 80, left: 16, right: 16),
+      ),
+    );
+  }
+
+  void _onMonitorTap() {
+    _activateMonitor();
+  }
+
+  void _onMonitorDismissed() {
+    _activateMonitor();
   }
 
   Future<void> reorderAccounts(List<Account> newAccounts) async {
@@ -186,6 +283,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final currentState = selectedAccount == null
         ? null
         : financialStates[selectedAccount!.id];
@@ -196,57 +295,47 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           RefreshIndicator(
             onRefresh: refresh,
-
             child: ListView(
               padding: const EdgeInsets.all(16),
-
               children: [
                 AccountsCarousel(
                   accounts: accounts,
                   balances: balances,
                   controller: _pageController,
                   currentPage: _currentPage,
-
                   onAccountSelected: loadAccountState,
-
                   onRefresh: refresh,
                 ),
-
                 const SizedBox(height: 20),
-
-                Container(height: 1, color: AppColors.divider),
-
+                Divider(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3),
+                  thickness: 1,
+                  height: 1,
+                ),
                 const SizedBox(height: 16),
-
                 HomeOverview(
                   income: currentState?.income ?? 0,
-
                   expenses: currentState?.expenses ?? 0,
                 ),
-
                 const SizedBox(height: 16),
-
-                Text('🕒 История операций', style: AppTextStyles.title),
-
+                Text('🕒 История операций', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 16),
-
                 OperationHistoryList(operations: operations.take(5).toList()),
               ],
             ),
           ),
-
           Positioned(
             left: 16,
-
-            right: 16,
-
-            bottom: 90,
-
-            child: const ActiveTasksPanel(),
+            bottom: 16,
+            child: TaskMonitorFloating(
+              isActive: _monitorActive,
+              hasError: _hasError,
+              onTap: _onMonitorTap,
+              onDismissed: _onMonitorDismissed,
+            ),
           ),
         ],
       ),
-
       floatingActionButton: ReceiptFloatingButton(
         onCreated: () async {
           await loadData();

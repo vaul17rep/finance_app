@@ -8,6 +8,7 @@ import '../../accounts/widgets/create_account_dialog.dart';
 import '../../accounts/account_details_screen.dart';
 
 import '../../../core/utils/custom_page_scroll_physics.dart';
+import 'package:flutter/physics.dart';
 
 class AccountsCarousel extends StatefulWidget {
   final List<Account> accounts;
@@ -69,7 +70,8 @@ class _AccountsCarouselState extends State<AccountsCarousel> {
       height: cardWidth / AccountCard.aspectRatio,
 
       child: PageView.builder(
-        physics: const CustomPageScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
+        pageSnapping: false,
 
         controller: widget.controller,
 

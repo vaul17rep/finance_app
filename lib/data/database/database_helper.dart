@@ -128,6 +128,53 @@ CREATE TABLE operations (
 ''');
 
     await db.execute('''
+  CREATE TABLE card_color_settings (
+    id TEXT PRIMARY KEY,
+    cardLightStart INTEGER,
+    cardLightEnd INTEGER,
+    cashLightStart INTEGER,
+    cashLightEnd INTEGER,
+    creditLightStart INTEGER,
+    creditLightEnd INTEGER,
+    otherLightStart INTEGER,
+    otherLightEnd INTEGER,
+    cardDarkStart INTEGER,
+    cardDarkEnd INTEGER,
+    cashDarkStart INTEGER,
+    cashDarkEnd INTEGER,
+    creditDarkStart INTEGER,
+    creditDarkEnd INTEGER,
+    otherDarkStart INTEGER,
+    otherDarkEnd INTEGER,
+    custom1Name TEXT DEFAULT '',
+    custom1LightStart INTEGER DEFAULT 0xFFB3C6E7,
+    custom1LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+    custom1DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+    custom1DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+    custom2Name TEXT DEFAULT '',
+    custom2LightStart INTEGER DEFAULT 0xFFB3C6E7,
+    custom2LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+    custom2DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+    custom2DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+    custom3Name TEXT DEFAULT '',
+    custom3LightStart INTEGER DEFAULT 0xFFB3C6E7,
+    custom3LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+    custom3DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+    custom3DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+    custom4Name TEXT DEFAULT '',
+    custom4LightStart INTEGER DEFAULT 0xFFB3C6E7,
+    custom4LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+    custom4DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+    custom4DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+    custom5Name TEXT DEFAULT '',
+    custom5LightStart INTEGER DEFAULT 0xFFB3C6E7,
+    custom5LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+    custom5DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+    custom5DarkEnd INTEGER DEFAULT 0xFF1E2A44
+  )
+''');
+
+    await db.execute('''
 
       CREATE TABLE receipts (
 

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../core/theme/theme_notifier.dart'; // создайте файл или оставьте как в main.dart
 import '../../core/preferences/app_settings.dart';
 import 'card_colors_settings_screen.dart';
+import '/data/services/background_manager/background_task_manager.dart';
+import '/data/services/background_manager/background_task.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -31,6 +33,138 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(children: children),
+    );
+  }
+
+  void _showEmbeddingModelDialog(BuildContext context) {
+    const models = [
+      'openai/text-embedding-3-small',
+      'openai/text-embedding-3-large',
+      'cohere/embed-english-v3.0',
+      // другие
+    ];
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Выберите модель эмбеддингов'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: models.map((model) {
+            return ListTile(
+              title: Text(model),
+              onTap: () {
+                setState(() {
+                  AppSettings.embeddingModel = model;
+                });
+                Navigator.pop(ctx);
+              },
+            );
+          }).toList(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReindexDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Переиндексация'),
+        content: const Text('Выберите источники для полной переиндексации:'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _startReindex(
+                context,
+                sourceTypes: ['receipt', 'memory_note'],
+                fullReindex: true,
+              );
+            },
+            child: const Text('Всё'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _startReindex(
+                context,
+                sourceTypes: ['receipt'],
+                fullReindex: true,
+              );
+            },
+            child: const Text('Только чеки'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _startReindex(
+                context,
+                sourceTypes: ['memory_note'],
+                fullReindex: true,
+              );
+            },
+            child: const Text('Только заметки'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startReindex(
+    BuildContext context, {
+    required List<String> sourceTypes,
+    required bool fullReindex,
+  }) {
+    // Запускаем задачу через BackgroundTaskManager
+    final task = BackgroundTask(
+      id: 'memory_index_${DateTime.now().millisecondsSinceEpoch}',
+      type: 'memory_index',
+      title: 'Полная переиндексация',
+      status: BackgroundTaskStatus.processing,
+      progress: 0.0,
+      message: 'Подготовка',
+      params: {'sourceTypes': sourceTypes, 'fullReindex': fullReindex},
+    );
+    BackgroundTaskManager.instance.addTask(task);
+    // Можно показать snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Запущена переиндексация (${sourceTypes.join(", ")})'),
+      ),
+    );
+  }
+
+  void _showIndexingStatsDialog(BuildContext context) {
+    // Здесь можно получить данные через EmbeddingRepository.countIndexedSources() и т.д.
+    // Пока просто заглушка.
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Статистика индексации'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Проиндексировано записей: 0'),
+            Text('Последняя индексация: никогда'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -175,14 +309,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
 
-          sectionTitle("AI"),
+          sectionTitle("AI и поиск"),
           settingsCard(
             children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.smart_toy_outlined),
+                title: const Text("Автоиндексация новых данных"),
+                subtitle: const Text(
+                  "Чеки и заметки будут автоматически индексироваться",
+                ),
+                value: AppSettings.autoIndexingEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    AppSettings.autoIndexingEnabled = value;
+                  });
+                  // Сохранить настройку (при желании)
+                },
+              ),
               ListTile(
-                leading: const Icon(Icons.smart_toy_outlined),
-                title: const Text("Настройки AI"),
-                subtitle: const Text("Модели, лимиты, ключи"),
+                leading: const Icon(Icons.model_training),
+                title: const Text("Модель эмбеддингов"),
+                subtitle: Text(AppSettings.embeddingModel),
                 trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  // Диалог выбора модели (пока можно просто показать список)
+                  _showEmbeddingModelDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.storage),
+                title: const Text("Статистика индексации"),
+                subtitle: const Text(
+                  "Проиндексировано записей: ...",
+                ), // можно вычислить через репозиторий
+                trailing: const Icon(Icons.info_outline),
+                onTap: () {
+                  // Показать детальную статистику
+                  _showIndexingStatsDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.sync),
+                title: const Text("Переиндексировать все данные"),
+                subtitle: const Text("Запустить полную переиндексацию"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  _showReindexDialog(context);
+                },
               ),
             ],
           ),

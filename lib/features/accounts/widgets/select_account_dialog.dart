@@ -3,7 +3,6 @@ import 'package:uuid/uuid.dart';
 
 import '../../../models/account.dart';
 import '../../../data/repositories/account_repository.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_dimensions.dart';
 
 final uuid = Uuid();

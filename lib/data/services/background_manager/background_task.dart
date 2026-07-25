@@ -1,5 +1,3 @@
-import 'dart:async';
-
 enum BackgroundTaskStatus { waiting, processing, completed, failed }
 
 class BackgroundTask {
@@ -10,6 +8,8 @@ class BackgroundTask {
   final double progress;
   final double displayProgress;
   final String message;
+  final String? type;
+  final Map<String, dynamic> params;
 
   BackgroundTask({
     required this.id,
@@ -19,6 +19,8 @@ class BackgroundTask {
     this.progress = 0,
     this.displayProgress = 0,
     this.message = "",
+    this.type,
+    this.params = const {},
   }) : createdAt = createdAt ?? DateTime.now();
 
   BackgroundTask copyWith({
@@ -27,6 +29,8 @@ class BackgroundTask {
     double? progress,
     double? displayProgress,
     String? message,
+    String? type,
+    Map<String, dynamic>? params,
   }) {
     return BackgroundTask(
       id: id,
@@ -36,6 +40,8 @@ class BackgroundTask {
       progress: progress ?? this.progress,
       displayProgress: displayProgress ?? this.displayProgress,
       message: message ?? this.message,
+      type: type ?? this.type,
+      params: params ?? this.params,
     );
   }
 }

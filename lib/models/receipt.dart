@@ -1,3 +1,4 @@
+
 class Receipt {
   final String id;
 

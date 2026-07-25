@@ -7,9 +7,6 @@ import '../../accounts/widgets/account_card.dart';
 import '../../accounts/widgets/create_account_dialog.dart';
 import '../../accounts/account_details_screen.dart';
 
-import '../../../core/utils/custom_page_scroll_physics.dart';
-import 'package:flutter/physics.dart';
-
 class AccountsCarousel extends StatefulWidget {
   final List<Account> accounts;
   final Map<String, double> balances;

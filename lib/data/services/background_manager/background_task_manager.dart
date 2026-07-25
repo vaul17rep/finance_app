@@ -2,20 +2,27 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'background_task.dart';
 import '../../../core/debug/debug_logger.dart';
+import '../../../features/memory/services/indexing_service.dart';
+import '../../../features/memory/services/vector_search_service.dart';
 
 class BackgroundTaskManager {
   static final BackgroundTaskManager instance = BackgroundTaskManager._();
 
   BackgroundTaskManager._();
 
+  IndexingService? _indexingService;
+  VectorSearchService? _vectorSearchService;
+
+  void init({
+    required IndexingService indexingService,
+    required VectorSearchService vectorSearchService,
+  }) {
+    _indexingService = indexingService;
+    _vectorSearchService = vectorSearchService;
+  }
+
   final ValueNotifier<List<BackgroundTask>> tasks = ValueNotifier([]);
   Timer? _animationTimer;
-
-  void addTask(BackgroundTask task) {
-    tasks.value = [...tasks.value, task];
-    _startAnimation();
-    DebugLogger.log("TASK ADDED: ${task.title}");
-  }
 
   void updateTask(
     String id, {
@@ -68,15 +75,11 @@ class BackgroundTaskManager {
         1.0 / (2 * 60); // ≈0.00833 – 100% за 2 секунды
 
     _animationTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
-      bool needsUpdate = false;
-
       tasks.value = tasks.value.map((task) {
         final double diff = task.progress - task.displayProgress;
 
         // Если разница пренебрежимо мала, не обновляем
         if (diff.abs() < 0.0005) return task;
-
-        needsUpdate = true;
 
         // Ограничиваем шаг сверху значением maxStepPerTick
         final double step = diff > 0
@@ -87,15 +90,90 @@ class BackgroundTaskManager {
 
         return task.copyWith(displayProgress: newDisplay);
       }).toList();
-
-      if (needsUpdate) {
-        tasks.notifyListeners();
-      }
     });
   }
 
   void _stopAnimation() {
     _animationTimer?.cancel();
     _animationTimer = null;
+  }
+
+  void addTask(BackgroundTask task) {
+    tasks.value = [...tasks.value, task];
+    _startAnimation();
+    DebugLogger.log("TASK ADDED: ${task.title}");
+
+    // Если задача относится к индексации, запускаем обработку асинхронно
+    if (task.type == 'memory_index' || task.type == 'memory_index_single') {
+      _processIndexingTask(task);
+    }
+  }
+
+  Future<void> _processIndexingTask(BackgroundTask task) async {
+    if (_indexingService == null || _vectorSearchService == null) {
+      failTask(task.id, message: 'Сервисы индексации не инициализированы');
+      return;
+    }
+
+    try {
+      if (task.type == 'memory_index') {
+        final sourceTypes = task.params['sourceTypes'] as List<String>?;
+        final fullReindex = task.params['fullReindex'] as bool? ?? false;
+
+        if (fullReindex) {
+          await _vectorSearchService!.deleteAll();
+        }
+
+        await _indexingService!.indexAll(
+          sourceTypes: sourceTypes,
+          onProgress: (processed, total) {
+            final progress = total > 0 ? processed / total : 0.0;
+            updateTask(
+              task.id,
+              progress: progress,
+              message: 'Индексация: $processed из $total',
+            );
+          },
+        );
+
+        updateTask(
+          task.id,
+          status: BackgroundTaskStatus.completed,
+          progress: 1.0,
+          message: 'Индексация завершена',
+        );
+      } else if (task.type == 'memory_index_single') {
+        final sourceType = task.params['sourceType'] as String;
+        final sourceId = task.params['sourceId'] as String;
+        final content = task.params['content'] as String;
+        final metadata = task.params['metadata'] as Map<String, dynamic>;
+        final sourceUpdatedAt = DateTime.parse(
+          task.params['sourceUpdatedAt'] as String,
+        );
+
+        await _indexingService!.indexSource(
+          sourceType: sourceType,
+          sourceId: sourceId,
+          content: content,
+          metadata: metadata,
+          sourceUpdatedAt: sourceUpdatedAt,
+        );
+
+        updateTask(
+          task.id,
+          status: BackgroundTaskStatus.completed,
+          progress: 1.0,
+          message: 'Объект проиндексирован',
+        );
+      }
+
+      // Через некоторое время удаляем задачу (после завершения)
+      await Future.delayed(const Duration(seconds: 3));
+      removeTask(task.id);
+    } catch (e) {
+      failTask(task.id, message: e.toString());
+      await Future.delayed(const Duration(seconds: 2));
+      removeTask(task.id);
+    }
   }
 }

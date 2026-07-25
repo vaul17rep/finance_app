@@ -5,6 +5,18 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:provider/provider.dart';
 
 import 'data/database/database_helper.dart';
+import 'data/database/memory_database.dart';
+import 'data/services/openrouter_service.dart';
+import 'data/services/background_manager/background_task_manager.dart';
+import 'data/repositories/receipt_repository.dart';
+import 'features/memory/repositories/embedding_repository.dart';
+import 'features/memory/repositories/memory_note_repository.dart';
+import 'features/memory/services/embedding_service.dart';
+import 'features/memory/services/indexing_service.dart';
+import 'features/memory/services/sqlite_vector_search_service.dart';
+import 'features/ai/ai_profiles.dart';
+import 'core/preferences/app_settings.dart';
+
 import 'core/theme/app_theme.dart';
 import 'features/navigation/main_navigation.dart';
 import 'core/theme/theme_notifier.dart';
@@ -20,6 +32,35 @@ void main() async {
 
   await DatabaseHelper.instance.debugOperationsTable();
 
+  // --- Инициализация зависимостей для Memory / Индексации ---
+  // 1. Репозитории
+  final embeddingRepository = EmbeddingRepository(MemoryDatabase.instance);
+  final receiptRepository = ReceiptRepository();
+  final memoryNoteRepository = MemoryNoteRepository(MemoryDatabase.instance);
+
+  // 2. Сервисы
+  final openRouterService = OpenRouterService(profile: AiProfiles.paid);
+  final embeddingService = EmbeddingService(openRouterService);
+  final vectorSearchService = SqliteVectorSearchService(embeddingRepository);
+
+  // 3. IndexingService
+  final indexingService = IndexingService(
+    embeddingService: embeddingService,
+    vectorSearchService: vectorSearchService,
+    receiptRepository: receiptRepository,
+    memoryNoteRepository: memoryNoteRepository,
+    taskManager: BackgroundTaskManager.instance,
+    embeddingModel: AppSettings.embeddingModel,
+    embeddingVersion: AppSettings.embeddingVersion,
+  );
+
+  // 4. Инициализируем BackgroundTaskManager
+  BackgroundTaskManager.instance.init(
+    indexingService: indexingService,
+    vectorSearchService: vectorSearchService,
+  );
+
+  // --- Запуск приложения ---
   runApp(
     MultiProvider(
       providers: [

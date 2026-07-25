@@ -5,6 +5,9 @@ import '../../data/repositories/receipt_repository.dart';
 import '../../models/receipt_item.dart';
 import '../../core/theme/app_dimensions.dart';
 import 'edit_receipt_item_screen.dart';
+import 'package:finance_app/core/preferences/app_settings.dart';
+import 'package:finance_app/data/services/background_manager/background_task.dart';
+import 'package:finance_app/data/services/background_manager/background_task_manager.dart';
 
 class EditReceiptScreen extends StatefulWidget {
   final Receipt receipt;
@@ -25,6 +28,20 @@ class _EditReceiptScreenState extends State<EditReceiptScreen> {
   late TimeOfDay selectedTime;
   List<ReceiptItem> items = [];
   bool hasChanges = false;
+
+  String _buildReceiptContentForIndexing(Receipt receipt) {
+    final buffer = StringBuffer();
+    buffer.writeln('Магазин: ${receipt.shop}');
+    buffer.writeln('Дата: ${receipt.date}');
+    buffer.writeln('Сумма: ${receipt.amount}');
+    if (items.isNotEmpty) {
+      buffer.writeln('Товары:');
+      for (var item in items) {
+        buffer.writeln('- ${item.name} x${item.quantity} = ${item.total}');
+      }
+    }
+    return buffer.toString();
+  }
 
   @override
   void initState() {
@@ -111,8 +128,35 @@ class _EditReceiptScreenState extends State<EditReceiptScreen> {
     await repository.updateReceipt(updatedReceipt);
     await repository.updateReceiptAmount(updatedReceipt.id, total);
 
-    if (mounted) {
-      Navigator.pop(context, updatedReceipt);
+    // Индексация обновлённого чека, если автоиндексация включена
+    if (AppSettings.autoIndexingEnabled) {
+      final content = _buildReceiptContentForIndexing(updatedReceipt);
+      final metadata = {
+        'receiptId': updatedReceipt.id,
+        'date': updatedReceipt.date.toIso8601String(),
+        'shop': updatedReceipt.shop,
+        'amount': updatedReceipt.amount,
+      };
+      BackgroundTaskManager.instance.addTask(
+        BackgroundTask(
+          id: 'index_receipt_${updatedReceipt.id}_${DateTime.now().millisecondsSinceEpoch}',
+          type: 'memory_index_single',
+          title: 'Обновление индекса чека',
+          status: BackgroundTaskStatus.processing,
+          progress: 0.0,
+          message: 'Обновление',
+          params: {
+            'sourceType': 'receipt',
+            'sourceId': updatedReceipt.id,
+            'content': content,
+            'metadata': metadata,
+            'sourceUpdatedAt': DateTime.now().toIso8601String(),
+          },
+        ),
+      );
+      if (mounted) {
+        Navigator.pop(context, updatedReceipt);
+      }
     }
   }
 

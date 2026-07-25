@@ -332,7 +332,7 @@ class _ReceiptDetailsScreenState extends State<ReceiptDetailsScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          '${item.quantity} ${item.unit ?? ''}${item.price != null ? ' × ${item.price.toStringAsFixed(2)} ₽' : ''}',
+          '${item.quantity} ${item.unit ?? ''} × ${item.price.toStringAsFixed(2)} ₽',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/account.dart';
@@ -72,6 +71,7 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
       }
     } catch (e, stackTrace) {
       debugPrint('AccountDetailsScreen ERROR: $e');
+      debugPrint('$stackTrace');
       if (mounted) {
         setState(() {
           _loading = false;

@@ -26,6 +26,7 @@ import '../repositories/operation_repository.dart';
 import '../../features/accounts/widgets/select_account_dialog.dart';
 import 'background_manager/background_task_manager.dart';
 import 'background_manager/background_task.dart';
+import '/core/preferences/app_settings.dart';
 
 String encodeImage(Uint8List bytes) {
   return "data:image/jpeg;base64,${base64Encode(bytes)}";
@@ -37,53 +38,6 @@ class ReceiptCreationService {
   static final operationRepository = OperationRepository();
   static final uuid = Uuid();
   static AiProfile selectedProfile = AiProfiles.paid;
-
-  static Future<ImageSource?> selectImageSource(BuildContext context) async {
-    return showModalBottomSheet<ImageSource>(
-      context: context,
-      builder: (_) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return SafeArea(
-              child: Wrap(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: DropdownButton<AiProfile>(
-                      value: selectedProfile,
-                      isExpanded: true,
-                      items: AiProfiles.all.map((profile) {
-                        return DropdownMenuItem(
-                          value: profile,
-                          child: Text(profile.name),
-                        );
-                      }).toList(),
-                      onChanged: (profile) {
-                        if (profile == null) return;
-                        setState(() {
-                          selectedProfile = profile;
-                        });
-                      },
-                    ),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.camera_alt),
-                    title: const Text('Камера'),
-                    onTap: () => Navigator.pop(context, ImageSource.camera),
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.photo),
-                    title: const Text('Галерея'),
-                    onTap: () => Navigator.pop(context, ImageSource.gallery),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
 
   static Future<void> createReceipt(BuildContext context) async {
     final taskId = "CHK-${DateTime.now().millisecondsSinceEpoch}";
@@ -215,11 +169,41 @@ class ReceiptCreationService {
         paymentType: result.paymentType,
         receiptId: receipt.id,
         accountId: account.id,
-        categoryId: 'food',
+        categoryId: null,
         processed: false,
       );
 
       await operationRepository.insertOperation(operation);
+
+      if (AppSettings.autoIndexingEnabled) {
+        // Формируем контент для индексации
+        final content = _buildReceiptContentForIndexing(receipt, items);
+        final metadata = {
+          'receiptId': receipt.id,
+          'date': receipt.date.toIso8601String(),
+          'shop': receipt.shop,
+          'amount': receipt.amount,
+          //'category': receipt.category ?? '',
+        };
+        // Запускаем задачу индексации одного чека
+        BackgroundTaskManager.instance.addTask(
+          BackgroundTask(
+            id: 'index_receipt_${receipt.id}',
+            type: 'memory_index_single',
+            title: 'Индексация чека',
+            status: BackgroundTaskStatus.processing,
+            progress: 0.0,
+            message: 'Подготовка',
+            params: {
+              'sourceType': 'receipt',
+              'sourceId': receipt.id,
+              'content': content,
+              'metadata': metadata,
+              'sourceUpdatedAt': DateTime.now().toIso8601String(),
+            },
+          ),
+        );
+      }
 
       BackgroundTaskManager.instance.updateTask(
         taskId,
@@ -239,5 +223,72 @@ class ReceiptCreationService {
       await Future.delayed(const Duration(seconds: 2));
       BackgroundTaskManager.instance.removeTask(taskId);
     }
+  }
+
+  static String _buildReceiptContentForIndexing(
+    Receipt receipt,
+    List<ReceiptItem> items,
+  ) {
+    final buffer = StringBuffer();
+
+    buffer.writeln('Магазин: ${receipt.shop}');
+    buffer.writeln('Дата: ${receipt.date}');
+
+    if (items.isNotEmpty) {
+      buffer.writeln('Товары:');
+
+      for (var item in items) {
+        buffer.writeln('- ${item.name} x${item.quantity} = ${item.total}');
+      }
+    }
+
+    return buffer.toString();
+  }
+
+  static Future<ImageSource?> selectImageSource(BuildContext context) async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return SafeArea(
+              child: Wrap(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: DropdownButton<AiProfile>(
+                      value: selectedProfile,
+                      isExpanded: true,
+                      items: AiProfiles.all.map((profile) {
+                        return DropdownMenuItem(
+                          value: profile,
+                          child: Text(profile.name),
+                        );
+                      }).toList(),
+                      onChanged: (profile) {
+                        if (profile == null) return;
+                        setState(() {
+                          selectedProfile = profile;
+                        });
+                      },
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.camera_alt),
+                    title: const Text('Камера'),
+                    onTap: () => Navigator.pop(context, ImageSource.camera),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.photo),
+                    title: const Text('Галерея'),
+                    onTap: () => Navigator.pop(context, ImageSource.gallery),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }

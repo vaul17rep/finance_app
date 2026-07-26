@@ -9,6 +9,10 @@ import 'package:finance_app/features/memory/repositories/memory_note_repository.
 import 'package:uuid/uuid.dart';
 import 'package:finance_app/models/receipt.dart';
 import 'package:finance_app/models/receipt_item.dart';
+import 'package:finance_app/features/memory/services/obsidian_reader_service.dart';
+import 'package:finance_app/features/memory/models/obsidian_note.dart';
+import 'package:finance_app/core/debug/debug_logger.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class IndexingService {
   final ReceiptRepository receiptRepository;
@@ -148,6 +152,54 @@ class IndexingService {
         onProgress(processed, total);
       }
     }
+  }
+
+  /// Индексация всех заметок из Obsidian vault
+  Future<void> indexObsidian(String vaultPath) async {
+    DebugLogger().logMemory('Начало индексации Obsidian vault: $vaultPath');
+
+    final reader = ObsidianReaderService();
+
+    List<ObsidianNote> notes;
+
+    try {
+      final status = await Permission.manageExternalStorage.status;
+
+      if (!status.isGranted) {
+        final result = await Permission.manageExternalStorage.request();
+
+        if (!result.isGranted) {
+          throw Exception('Нет доступа к файлам устройства');
+        }
+      }
+
+      notes = await reader.readVault(vaultPath);
+    } catch (e) {
+      DebugLogger().logMemory('Ошибка чтения vault: $e');
+      rethrow;
+    }
+
+    if (notes.isEmpty) {
+      throw Exception('В Vault не найдено markdown-файлов');
+    }
+
+    for (final note in notes) {
+      try {
+        await indexSource(
+          sourceType: 'obsidian_note',
+          sourceId: note.path,
+          content: note.content,
+          metadata: {'title': note.title, 'path': note.path},
+          sourceUpdatedAt: note.modifiedAt,
+        );
+
+        DebugLogger().logMemory('Сохранён embedding Obsidian: ${note.path}');
+      } catch (e) {
+        DebugLogger().logMemory('Ошибка индексации Obsidian ${note.path}: $e');
+      }
+    }
+
+    DebugLogger().logMemory('Индексация Obsidian завершена');
   }
 
   void scheduleIndexing({List<String>? sourceTypes, bool fullReindex = false}) {

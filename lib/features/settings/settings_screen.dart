@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/theme_notifier.dart'; // создайте файл или оставьте как в main.dart
 import '../../core/preferences/app_settings.dart';
+import '../../core/debug/debug_logger.dart';
 import 'card_colors_settings_screen.dart';
 import '/data/services/background_manager/background_task_manager.dart';
 import '/data/services/background_manager/background_task.dart';
@@ -310,95 +312,145 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
 
+          sectionTitle("Obsidian"),
+          settingsCard(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text("Obsidian Vault"),
+                subtitle: FutureBuilder<String?>(
+                  future: AppSettings.getObsidianVaultPath(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Text("...");
+                    }
+
+                    final path = snapshot.data;
+
+                    if (path == null || path.isEmpty) {
+                      return const Text("📁 Папка не выбрана");
+                    }
+
+                    return Text(path, overflow: TextOverflow.ellipsis);
+                  },
+                ),
+                trailing: ElevatedButton(
+                  onPressed: () async {
+                    final selectedDirectory = await FilePicker.platform
+                        .getDirectoryPath();
+
+                    if (selectedDirectory != null) {
+                      await AppSettings.setObsidianVaultPath(selectedDirectory);
+
+                      DebugLogger().logMemory(
+                        'Obsidian vault path set to: $selectedDirectory',
+                      );
+
+                      setState(() {});
+                    }
+                  },
+                  child: const Text("Выбрать"),
+                ),
+              ),
+            ],
+          ),
+
           sectionTitle("AI и поиск"),
           settingsCard(
             children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.smart_toy_outlined),
-                title: const Text("Автоиндексация новых данных"),
-                subtitle: const Text(
-                  "Чеки и заметки будут автоматически индексироваться",
+              sectionTitle("AI и поиск"),
+              settingsCard(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.smart_toy_outlined),
+                    title: const Text("Автоиндексация новых данных"),
+                    subtitle: const Text(
+                      "Чеки и заметки будут автоматически индексироваться",
+                    ),
+                    value: AppSettings.autoIndexingEnabled,
+                    onChanged: (value) {
+                      setState(() {
+                        AppSettings.autoIndexingEnabled = value;
+                      });
+                      // Сохранить настройку (при желании)
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.model_training),
+                    title: const Text("Модель эмбеддингов"),
+                    subtitle: Text(AppSettings.embeddingModel),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      // Диалог выбора модели (пока можно просто показать список)
+                      _showEmbeddingModelDialog(context);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.storage),
+                    title: const Text("Статистика индексации"),
+                    subtitle: const Text(
+                      "Проиндексировано записей: ...",
+                    ), // можно вычислить через репозиторий
+                    trailing: const Icon(Icons.info_outline),
+                    onTap: () {
+                      // Показать детальную статистику
+                      _showIndexingStatsDialog(context);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.sync),
+                    title: const Text("Переиндексировать все данные"),
+                    subtitle: const Text("Запустить полную переиндексацию"),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      _showReindexDialog(context);
+                    },
+                  ),
+                ],
+              ),
+
+              sectionTitle("Разработка"),
+              settingsCard(
+                children: [
+                  SwitchListTile(
+                    secondary: const Icon(Icons.bug_report_outlined),
+                    title: const Text("Режим разработчика"),
+                    subtitle: const Text("Показывать отладочные функции"),
+                    value: AppSettings.developerMode,
+                    onChanged: (value) {
+                      setState(() {
+                        AppSettings.developerMode = value;
+                      });
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.list_alt),
+                    title: const Text("Логи"),
+                    subtitle: const Text("Просмотр логов приложения"),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DebugLogScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 30),
+              const Center(
+                child: Text(
+                  "Finance App\nВерсия 0.1",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
                 ),
-                value: AppSettings.autoIndexingEnabled,
-                onChanged: (value) {
-                  setState(() {
-                    AppSettings.autoIndexingEnabled = value;
-                  });
-                  // Сохранить настройку (при желании)
-                },
               ),
-              ListTile(
-                leading: const Icon(Icons.model_training),
-                title: const Text("Модель эмбеддингов"),
-                subtitle: Text(AppSettings.embeddingModel),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  // Диалог выбора модели (пока можно просто показать список)
-                  _showEmbeddingModelDialog(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.storage),
-                title: const Text("Статистика индексации"),
-                subtitle: const Text(
-                  "Проиндексировано записей: ...",
-                ), // можно вычислить через репозиторий
-                trailing: const Icon(Icons.info_outline),
-                onTap: () {
-                  // Показать детальную статистику
-                  _showIndexingStatsDialog(context);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.sync),
-                title: const Text("Переиндексировать все данные"),
-                subtitle: const Text("Запустить полную переиндексацию"),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  _showReindexDialog(context);
-                },
-              ),
+              const SizedBox(height: 30),
             ],
           ),
-
-          sectionTitle("Разработка"),
-          settingsCard(
-            children: [
-              SwitchListTile(
-                secondary: const Icon(Icons.bug_report_outlined),
-                title: const Text("Режим разработчика"),
-                subtitle: const Text("Показывать отладочные функции"),
-                value: AppSettings.developerMode,
-                onChanged: (value) {
-                  setState(() {
-                    AppSettings.developerMode = value;
-                  });
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.list_alt),
-                title: const Text("Логи"),
-                subtitle: const Text("Просмотр логов приложения"),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DebugLogScreen()),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 30),
-          const Center(
-            child: Text(
-              "Finance App\nВерсия 0.1",
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
-            ),
-          ),
-          const SizedBox(height: 30),
         ],
       ),
     );

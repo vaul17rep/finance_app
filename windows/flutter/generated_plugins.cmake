@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   image_compress_plus_windows
+  permission_handler_windows
   share_plus
   url_launcher_windows
 )

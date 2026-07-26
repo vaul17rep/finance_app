@@ -5,7 +5,9 @@ import 'package:finance_app/features/memory/models/embedding_model.dart';
 import 'package:finance_app/features/memory/services/indexing_service.dart';
 import 'package:finance_app/core/debug/debug_logger.dart';
 import 'package:finance_app/features/debug/screens/debug_log_screen.dart';
-
+import 'package:finance_app/core/preferences/app_settings.dart';
+import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
 class MemoryScreen extends StatefulWidget {
   final VectorSearchService vectorSearchService;
@@ -28,6 +30,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
   List<EmbeddingModel> _results = [];
   bool _isLoading = false;
   String? _error;
+  bool _isIndexingObsidian = false;
 
   // Инжектируем зависимости (через provider, getIt или параметры)
   late final VectorSearchService _vectorSearchService;
@@ -41,6 +44,22 @@ class _MemoryScreenState extends State<MemoryScreen> {
     _vectorSearchService = widget.vectorSearchService;
     _embeddingService = widget.embeddingService;
     _indexingService = widget.indexingService;
+  }
+
+  void _showObsidianNoteDetail(EmbeddingModel embedding) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(embedding.metadata['title'] ?? 'Без названия'),
+        content: SingleChildScrollView(child: Text(embedding.content)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _performSearch(String query) async {
@@ -118,6 +137,17 @@ class _MemoryScreenState extends State<MemoryScreen> {
                 ),
               );
             },
+          ),
+          IconButton(
+            icon: _isIndexingObsidian
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.folder_open),
+            tooltip: 'Индексировать Obsidian',
+            onPressed: _isIndexingObsidian ? null : _onIndexObsidianPressed,
           ),
         ],
       ),
@@ -215,6 +245,10 @@ class _MemoryScreenState extends State<MemoryScreen> {
                         typeLabel = 'Заметка';
                         icon = Icons.note;
                         title = metadata['title'] ?? 'Заметка';
+                      } else if (embedding.sourceType == 'obsidian_note') {
+                        typeLabel = 'Obsidian';
+                        icon = Icons.notes;
+                        title = metadata['title'] ?? 'Без названия';
                       }
 
                       return ListTile(
@@ -226,7 +260,14 @@ class _MemoryScreenState extends State<MemoryScreen> {
                               : embedding.content,
                         ),
                         onTap: () {
-                          _openSource(embedding.sourceType, embedding.sourceId);
+                          if (embedding.sourceType == 'obsidian_note') {
+                            _showObsidianNoteDetail(embedding);
+                          } else {
+                            _openSource(
+                              embedding.sourceType,
+                              embedding.sourceId,
+                            );
+                          }
                         },
                       );
                     },
@@ -235,6 +276,69 @@ class _MemoryScreenState extends State<MemoryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _onIndexObsidianPressed() async {
+    final permission = await Permission.manageExternalStorage.status;
+
+    DebugLogger().logMemory('MANAGE_EXTERNAL_STORAGE: $permission');
+    if (Platform.isAndroid) {
+      final status = await Permission.manageExternalStorage.status;
+
+      if (!status.isGranted) {
+        final result = await Permission.manageExternalStorage.request();
+
+        if (!result.isGranted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Нужно разрешение на доступ ко всем файлам'),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+
+    final vaultPath = await AppSettings.getObsidianVaultPath();
+
+    if (vaultPath == null || vaultPath.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Сначала выберите папку Obsidian Vault в настройках'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isIndexingObsidian = true;
+    });
+
+    try {
+      await _indexingService.indexObsidian(vaultPath);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Индексация Obsidian завершена')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка индексации: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isIndexingObsidian = false;
+        });
+      }
+    }
   }
 
   void _showReindexDialog() {
@@ -255,7 +359,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
             onPressed: () {
               Navigator.pop(ctx);
               _indexingService.scheduleIndexing(
-                sourceTypes: ['receipt', 'memory_note'],
+                sourceTypes: ['receipt'],
                 fullReindex: true,
               );
             },

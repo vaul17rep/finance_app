@@ -41,6 +41,10 @@ class ReceiptCreationService {
 
   static Future<void> createReceipt(BuildContext context) async {
     final taskId = "CHK-${DateTime.now().millisecondsSinceEpoch}";
+    DebugLogger().logFinance(
+      'Создание чека начато, taskId=$taskId',
+      level: LogLevel.info,
+    );
 
     try {
       final source = await selectImageSource(context);
@@ -48,6 +52,10 @@ class ReceiptCreationService {
 
       final image = await picker.pickImage(source: source);
       if (image == null) return;
+      DebugLogger().logFinance(
+        'Изображение выбрано: ${image.path}',
+        level: LogLevel.debug,
+      );
 
       BackgroundTaskManager.instance.addTask(
         BackgroundTask(
@@ -69,6 +77,10 @@ class ReceiptCreationService {
       final savedPhotoPath = await PhotoStorageService.savePhoto(
         File(image.path),
       );
+      DebugLogger().logFinance(
+        'Фото сохранено: $savedPhotoPath',
+        level: LogLevel.debug,
+      );
 
       await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
@@ -88,6 +100,11 @@ class ReceiptCreationService {
         throw Exception("Не удалось сжать изображение");
       }
 
+      DebugLogger().logFinance(
+        'Изображение сжато, размер=${compressed.length}',
+        level: LogLevel.debug,
+      );
+
       await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
         taskId,
@@ -106,6 +123,10 @@ class ReceiptCreationService {
 
       final service = OpenRouterService(profile: selectedProfile);
       ParsedReceipt result = await service.analyzeReceipt(base64);
+      DebugLogger().logFinance(
+        'AI распознал чек, магазин=${result.shop}, сумма=${result.totalAmount}, товаров=${result.items.length}',
+        level: LogLevel.info,
+      );
 
       await Future.delayed(const Duration(milliseconds: 400));
       BackgroundTaskManager.instance.updateTask(
@@ -120,8 +141,19 @@ class ReceiptCreationService {
           taskId,
           message: 'Счёт не выбран',
         );
+
+        DebugLogger().logFinance(
+          'Счёт не выбран, задача отменена',
+          level: LogLevel.warning,
+        );
+
         return;
       }
+
+      DebugLogger().logFinance(
+        'Выбран счёт: ${account.name} (${account.id})',
+        level: LogLevel.debug,
+      );
 
       final receipt = Receipt(
         id: 'CHK-${DateTime.now().millisecondsSinceEpoch}',
@@ -158,6 +190,11 @@ class ReceiptCreationService {
       );
 
       await receiptRepository.insertReceiptWithItems(receipt, items);
+      DebugLogger().logFinance(
+        'Чек сохранён: ${receipt.id}',
+        level: LogLevel.info,
+        extra: {'receiptId': receipt.id},
+      );
 
       final operation = Operation(
         id: 'OP-${DateTime.now().millisecondsSinceEpoch}',
@@ -174,6 +211,11 @@ class ReceiptCreationService {
       );
 
       await operationRepository.insertOperation(operation);
+      DebugLogger().logFinance(
+        'Операция создана: ${operation.id}',
+        level: LogLevel.info,
+        extra: {'operationId': operation.id, 'amount': operation.amount},
+      );
 
       if (AppSettings.autoIndexingEnabled) {
         final content = _buildReceiptContentForIndexing(receipt, items);
@@ -211,9 +253,19 @@ class ReceiptCreationService {
 
       await Future.delayed(const Duration(seconds: 3));
       BackgroundTaskManager.instance.removeTask(taskId);
-    } catch (e) {
+    } catch (e, stack) {
+      DebugLogger().logFinance(
+        'Ошибка создания чека: $e',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
       BackgroundTaskManager.instance.failTask(taskId, message: e.toString());
-      DebugLogger.log("RECEIPT ERROR: $e");
+      DebugLogger().logFinance(
+        'Ошибка создания чека: $e',
+        level: LogLevel.error,
+        error: e,
+      );
       await Future.delayed(const Duration(seconds: 2));
       BackgroundTaskManager.instance.removeTask(taskId);
     }

@@ -7,9 +7,21 @@ import '../home/home_screen.dart';
 import '../memory/screens/memory_screen.dart';
 import '../operations/operations_screen.dart';
 import '../accounts/accounts_screen.dart';
+import '../memory/services/embedding_service.dart';
+import '../memory/services/vector_search_service.dart';
+import '../memory/services/indexing_service.dart';
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  final VectorSearchService vectorSearchService;
+  final EmbeddingService embeddingService;
+  final IndexingService indexingService;
+
+  const MainNavigation({
+    super.key,
+    required this.vectorSearchService,
+    required this.embeddingService,
+    required this.indexingService,
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -22,9 +34,15 @@ class _MainNavigationState extends State<MainNavigation> {
   bool _snackBarVisible = false;
 
   // УБРАТЬ const - MemoryScreen не является константным конструктором
-  final pages = [
+  List<Widget> get pages => [
     HomeScreen(),
-    MemoryScreen(), // <-- БЕЗ const
+
+    MemoryScreen(
+      vectorSearchService: widget.vectorSearchService,
+      embeddingService: widget.embeddingService,
+      indexingService: widget.indexingService,
+    ),
+
     OperationsScreen(),
     AccountsScreen(),
   ];

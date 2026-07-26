@@ -6,6 +6,7 @@ import '../../core/preferences/app_settings.dart';
 import 'card_colors_settings_screen.dart';
 import '/data/services/background_manager/background_task_manager.dart';
 import '/data/services/background_manager/background_task.dart';
+import '../debug/screens/debug_log_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -363,11 +364,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           sectionTitle("Разработка"),
           settingsCard(
             children: [
+              SwitchListTile(
+                secondary: const Icon(Icons.bug_report_outlined),
+                title: const Text("Режим разработчика"),
+                subtitle: const Text("Показывать отладочные функции"),
+                value: AppSettings.developerMode,
+                onChanged: (value) {
+                  setState(() {
+                    AppSettings.developerMode = value;
+                  });
+                },
+              ),
               ListTile(
-                leading: const Icon(Icons.bug_report_outlined),
-                title: const Text("Отладка"),
-                subtitle: const Text("Логи и диагностика"),
+                leading: const Icon(Icons.list_alt),
+                title: const Text("Логи"),
+                subtitle: const Text("Просмотр логов приложения"),
                 trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DebugLogScreen()),
+                  );
+                },
               ),
             ],
           ),

@@ -4,6 +4,7 @@ import 'package:finance_app/features/memory/models/embedding_model.dart';
 import 'package:finance_app/features/memory/repositories/embedding_repository.dart';
 import 'package:finance_app/features/memory/utils/vector_utils.dart';
 import 'vector_search_service.dart';
+import 'package:finance_app/core/debug/debug_logger.dart';
 
 class SqliteVectorSearchService implements VectorSearchService {
   final EmbeddingRepository embeddingRepository;
@@ -23,18 +24,76 @@ class SqliteVectorSearchService implements VectorSearchService {
     Uint8List queryVector, {
     int limit = 10,
   }) async {
+    DebugLogger().logMemory(
+      'Vector поиск начат: limit=$limit',
+      level: LogLevel.debug,
+    );
+
     final embeddings = await embeddingRepository.findAllForSearch();
+
+    DebugLogger().logMemory(
+      'В памяти найдено эмбеддингов: ${embeddings.length}',
+      level: LogLevel.debug,
+    );
+
     final query = blobToVector(queryVector);
+
     final scored = <_ScoredEmbedding>[];
 
     for (var emb in embeddings) {
-      final vector = blobToVector(emb.vector);
-      final similarity = cosineSimilarity(query, vector);
-      scored.add(_ScoredEmbedding(emb, similarity));
+      final size = emb.vector.lengthInBytes;
+
+      DebugLogger().logMemory(
+        'Проверка embedding: '
+        'id=${emb.id}, '
+        'source=${emb.sourceType}:${emb.sourceId}, '
+        'размер=$size',
+        level: LogLevel.debug,
+      );
+
+      if (size % 4 != 0) {
+        DebugLogger().logMemory(
+          'Пропущен битый embedding: '
+          'id=${emb.id}, '
+          'размер=$size байт',
+          level: LogLevel.warning,
+        );
+        continue;
+      }
+
+      try {
+        final vector = blobToVector(emb.vector);
+
+        final similarity = cosineSimilarity(query, vector);
+        DebugLogger().logMemory(
+          'Сходство ${emb.sourceId}: $similarity',
+          level: LogLevel.debug,
+        );
+
+        scored.add(_ScoredEmbedding(emb, similarity));
+      } catch (e, stack) {
+        DebugLogger().logMemory(
+          'Ошибка обработки embedding: '
+          'id=${emb.id}, '
+          'source=${emb.sourceType}:${emb.sourceId}, '
+          'размер=${emb.vector.lengthInBytes}, '
+          'ошибка=$e',
+          level: LogLevel.error,
+          error: e,
+          stackTrace: stack,
+        );
+      }
     }
 
     scored.sort((a, b) => b.similarity.compareTo(a.similarity));
+
     final top = scored.take(limit).map((s) => s.embedding).toList();
+
+    DebugLogger().logMemory(
+      'Vector поиск завершён: возвращено ${top.length}',
+      level: LogLevel.info,
+    );
+
     return top;
   }
 

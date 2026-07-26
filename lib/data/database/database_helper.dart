@@ -7,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../../models/receipt.dart';
 import '../../models/receipt_item.dart';
 import '../../models/account.dart';
+import '../../core/debug/debug_logger.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -30,6 +31,10 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
 
     final path = join(dbPath, fileName);
+    DebugLogger().logDatabase(
+      'Инициализация БД, путь: $path',
+      level: LogLevel.info,
+    );
 
     print("DATABASE PATH: $path");
 
@@ -250,11 +255,24 @@ CREATE TABLE operations (
   }
 
   Future<void> insertOperation(Map<String, dynamic> operation) async {
-    final db = await database;
-
-    await db.transaction((txn) async {
-      await txn.insert('operations', operation);
-    });
+    try {
+      final db = await database;
+      await db.transaction((txn) async {
+        await txn.insert('operations', operation);
+      });
+      DebugLogger().logDatabase(
+        'Операция вставлена: ${operation['id']}',
+        level: LogLevel.debug,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка вставки операции',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getOperations() async {
@@ -367,26 +385,33 @@ CREATE TABLE operations (
   }
 
   Future<double> recalculateReceiptAmount(String receiptId) async {
-    final db = await database;
-
-    final result = await db.rawQuery(
-      '''
-    SELECT SUM(total) as total
-    FROM receipt_items
-    WHERE receiptId = ?
-    ''',
-      [receiptId],
-    );
-
-    final total = (result.first['total'] as num?)?.toDouble() ?? 0;
-
-    await db.update(
-      'receipts',
-      {'amount': total},
-      where: 'id = ?',
-      whereArgs: [receiptId],
-    );
-    return total;
+    try {
+      final db = await database;
+      final result = await db.rawQuery(
+        'SELECT SUM(total) as total FROM receipt_items WHERE receiptId = ?',
+        [receiptId],
+      );
+      final total = (result.first['total'] as num?)?.toDouble() ?? 0;
+      await db.update(
+        'receipts',
+        {'amount': total},
+        where: 'id = ?',
+        whereArgs: [receiptId],
+      );
+      DebugLogger().logDatabase(
+        'Пересчитана сумма чека $receiptId: $total',
+        level: LogLevel.debug,
+      );
+      return total;
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка пересчёта чека $receiptId',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
   }
 
   Future<void> insertReceipt(Receipt receipt) async {
@@ -443,17 +468,27 @@ CREATE TABLE operations (
   // ============================================
 
   Future<void> updateReceipt(Receipt receipt) async {
-    final db = await database;
-
-    await db.update(
-      'receipts',
-
-      receipt.toMap(),
-
-      where: 'id = ?',
-
-      whereArgs: [receipt.id],
-    );
+    try {
+      final db = await database;
+      await db.update(
+        'receipts',
+        receipt.toMap(),
+        where: 'id = ?',
+        whereArgs: [receipt.id],
+      );
+      DebugLogger().logDatabase(
+        'Чек обновлён: ${receipt.id}',
+        level: LogLevel.debug,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка обновления чека ${receipt.id}',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
   }
 
   Future<void> insertReceiptItem(ReceiptItem item) async {
@@ -491,48 +526,84 @@ CREATE TABLE operations (
   // ============================================
 
   Future<void> updateReceiptItem(ReceiptItem item) async {
-    final db = await database;
-
-    await db.update(
-      'receipt_items',
-      item.toMap(),
-      where: 'id = ?',
-      whereArgs: [item.id],
-    );
+    try {
+      final db = await database;
+      await db.update(
+        'receipt_items',
+        item.toMap(),
+        where: 'id = ?',
+        whereArgs: [item.id],
+      );
+      DebugLogger().logDatabase(
+        'Товар обновлён: ${item.id}',
+        level: LogLevel.debug,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка обновления товара ${item.id}',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
   }
 
   Future<void> deleteReceipt(String receiptId) async {
-    final db = await database;
-
-    await db.transaction((txn) async {
-      await txn.delete(
-        'operations',
-        where: 'receiptId = ?',
-        whereArgs: [receiptId],
+    try {
+      final db = await database;
+      await db.transaction((txn) async {
+        await txn.delete(
+          'operations',
+          where: 'receiptId = ?',
+          whereArgs: [receiptId],
+        );
+        await txn.delete(
+          'receipt_items',
+          where: 'receiptId = ?',
+          whereArgs: [receiptId],
+        );
+        await txn.delete('receipts', where: 'id = ?', whereArgs: [receiptId]);
+      });
+      DebugLogger().logDatabase(
+        'Чек удалён: $receiptId',
+        level: LogLevel.debug,
       );
-
-      await txn.delete(
-        'receipt_items',
-        where: 'receiptId = ?',
-        whereArgs: [receiptId],
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка удаления чека $receiptId',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
       );
-
-      await txn.delete('receipts', where: 'id = ?', whereArgs: [receiptId]);
-    });
+      rethrow;
+    }
   }
 
   Future<void> insertReceiptWithItems(
     Receipt receipt,
     List<ReceiptItem> items,
   ) async {
-    final db = await database;
-
-    await db.transaction((txn) async {
-      await txn.insert('receipts', receipt.toMap());
-
-      for (final item in items) {
-        await txn.insert('receipt_items', item.toMap());
-      }
-    });
+    try {
+      final db = await database;
+      await db.transaction((txn) async {
+        await txn.insert('receipts', receipt.toMap());
+        for (final item in items) {
+          await txn.insert('receipt_items', item.toMap());
+        }
+      });
+      DebugLogger().logDatabase(
+        'Чек с товарами сохранён: ${receipt.id}, товаров=${items.length}',
+        level: LogLevel.info,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка сохранения чека ${receipt.id}',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
   }
 }

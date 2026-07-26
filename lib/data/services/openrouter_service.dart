@@ -23,6 +23,11 @@ class OpenRouterService {
     final selectedApiKey = AiKeyManager.getAvailableKey(profile);
     final embeddingModel = model ?? 'openai/text-embedding-3-small';
 
+    DebugLogger().logAi(
+      'Запрос эмбеддинга, модель=$embeddingModel, длина текста=${text.length}',
+      level: LogLevel.debug,
+    );
+
     final response = await http.post(
       Uri.parse('https://openrouter.ai/api/v1/embeddings'),
       headers: {
@@ -35,7 +40,10 @@ class OpenRouterService {
     );
 
     if (response.statusCode != 200) {
-      // Обработка ошибок аналогична analyzeReceipt
+      DebugLogger().logAi(
+        'Ошибка эмбеддинга: ${response.statusCode}',
+        level: LogLevel.error,
+      );
       if (response.statusCode == 429) {
         AiKeyManager.markFailed(selectedApiKey);
       }
@@ -58,15 +66,12 @@ class OpenRouterService {
   }
 
   Future<ParsedReceipt> analyzeReceipt(String imageBase64) async {
-    DebugLogger.log("START AI ANALYZE");
-
-    DebugLogger.log("IMAGE SIZE: ${imageBase64.length}");
-
     final selectedApiKey = AiKeyManager.getAvailableKey(profile);
 
-    DebugLogger.log("AI PROFILE: ${profile.name}");
-
-    DebugLogger.log("API KEY LENGTH: ${selectedApiKey.length}");
+    DebugLogger().logAi(
+      'Начало распознавания чека, профиль=${profile.name}, размер изображения=${imageBase64.length}',
+      level: LogLevel.info,
+    );
     final response = await http.post(
       Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
 
@@ -398,18 +403,18 @@ class OpenRouterService {
       }),
     );
 
-    print("==============================");
-    print("OPENROUTER STATUS:");
-    print(response.statusCode);
-    DebugLogger.log("OPENROUTER STATUS: ${response.statusCode}");
-    print("==============================");
-    print("RAW RESPONSE:");
-    print(response.body);
-    DebugLogger.log("RESPONSE LENGTH: ${response.body.length}");
+    DebugLogger().logAi(
+      'Ответ OpenRouter: статус ${response.statusCode}, длина ответа=${response.body.length}',
+      level: LogLevel.info,
+    );
     if (response.statusCode != 200) {
       if (response.statusCode == 429) {
         AiKeyManager.markFailed(selectedApiKey);
       }
+      DebugLogger().logAi(
+        'Ошибка OpenRouter: ${response.statusCode}',
+        level: LogLevel.error,
+      );
 
       if (response.statusCode == 402) {
         final body = jsonDecode(response.body);
@@ -422,10 +427,18 @@ class OpenRouterService {
 
         throw AiLimitException(available);
       }
+      DebugLogger().logAi(
+        'Ошибка OpenRouter: ${response.statusCode}',
+        level: LogLevel.error,
+      );
 
       if (response.statusCode == 401) {
         throw Exception("Неверный AI ключ");
       }
+      DebugLogger().logAi(
+        'Ошибка OpenRouter: ${response.statusCode}',
+        level: LogLevel.error,
+      );
 
       throw Exception("OpenRouter error ${response.statusCode}");
     }
@@ -465,6 +478,11 @@ class OpenRouterService {
 
       print("BROKEN JSON:");
       print(cleanText);
+      DebugLogger().logAi(
+        'Ошибка парсинга JSON от AI',
+        level: LogLevel.error,
+        error: e,
+      );
 
       throw Exception("Invalid AI JSON");
     }
@@ -577,6 +595,11 @@ class OpenRouterService {
     print(items.length);
 
     print("==============================");
+
+    DebugLogger().logAi(
+      'Чек успешно распознан, магазин=${json['store']}, сумма=${json['total_amount']}, товаров=${(json['items'] ?? []).length}',
+      level: LogLevel.info,
+    );
 
     return ParsedReceipt(
       date: date,

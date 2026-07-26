@@ -21,9 +21,13 @@ import 'core/theme/app_theme.dart';
 import 'features/navigation/main_navigation.dart';
 import 'core/theme/theme_notifier.dart';
 import 'core/preferences/color_settings_notifier.dart';
+import 'core/debug/debug_logger.dart';
+import 'features/memory/services/vector_search_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await DebugLogger().init();
 
   if (Platform.isWindows) {
     sqfliteFfiInit();
@@ -69,13 +73,26 @@ void main() async {
           create: (_) => ColorSettingsNotifier()..loadSettings(),
         ),
       ],
-      child: const FinanceApp(),
+      child: FinanceApp(
+        vectorSearchService: vectorSearchService,
+        embeddingService: embeddingService,
+        indexingService: indexingService,
+      ),
     ),
   );
 }
 
 class FinanceApp extends StatelessWidget {
-  const FinanceApp({super.key});
+  final VectorSearchService vectorSearchService;
+  final EmbeddingService embeddingService;
+  final IndexingService indexingService;
+
+  const FinanceApp({
+    super.key,
+    required this.vectorSearchService,
+    required this.embeddingService,
+    required this.indexingService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +110,11 @@ class FinanceApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [Locale('ru')],
-      home: const MainNavigation(),
+      home: MainNavigation(
+        vectorSearchService: vectorSearchService,
+        embeddingService: embeddingService,
+        indexingService: indexingService,
+      ),
     );
   }
 }

@@ -3,10 +3,24 @@ import 'package:finance_app/features/memory/services/vector_search_service.dart'
 import 'package:finance_app/features/memory/services/embedding_service.dart';
 import 'package:finance_app/features/memory/models/embedding_model.dart';
 import 'package:finance_app/features/memory/services/indexing_service.dart';
+import 'package:finance_app/core/debug/debug_logger.dart';
+import 'package:finance_app/features/debug/screens/debug_log_screen.dart';
+
 
 class MemoryScreen extends StatefulWidget {
+  final VectorSearchService vectorSearchService;
+  final EmbeddingService embeddingService;
+  final IndexingService indexingService;
+
+  const MemoryScreen({
+    super.key,
+    required this.vectorSearchService,
+    required this.embeddingService,
+    required this.indexingService,
+  });
+
   @override
-  _MemoryScreenState createState() => _MemoryScreenState();
+  State<MemoryScreen> createState() => _MemoryScreenState();
 }
 
 class _MemoryScreenState extends State<MemoryScreen> {
@@ -16,15 +30,17 @@ class _MemoryScreenState extends State<MemoryScreen> {
   String? _error;
 
   // Инжектируем зависимости (через provider, getIt или параметры)
-  late VectorSearchService _vectorSearchService;
-  late EmbeddingService _embeddingService;
-  late IndexingService _indexingService;
+  late final VectorSearchService _vectorSearchService;
+  late final EmbeddingService _embeddingService;
+  late final IndexingService _indexingService;
 
   @override
   void initState() {
     super.initState();
-    // Инициализация зависимостей (замените на свой способ)
-    // Например, через Provider.of(context) или getIt.get()
+
+    _vectorSearchService = widget.vectorSearchService;
+    _embeddingService = widget.embeddingService;
+    _indexingService = widget.indexingService;
   }
 
   Future<void> _performSearch(String query) async {
@@ -34,20 +50,49 @@ class _MemoryScreenState extends State<MemoryScreen> {
       });
       return;
     }
+
+    DebugLogger().logMemory(
+      'Memory поиск начат: "$query"',
+      level: LogLevel.info,
+    );
+
     setState(() {
       _isLoading = true;
       _error = null;
     });
+
     try {
-      // Получаем вектор запроса
+      DebugLogger().logMemory(
+        'Создание embedding для запроса',
+        level: LogLevel.debug,
+      );
+
       final queryVector = await _embeddingService.getEmbeddingBlob(query);
-      // Ищем
+
+      DebugLogger().logMemory(
+        'Embedding создан, размер=${queryVector.length}',
+        level: LogLevel.debug,
+      );
+
       final results = await _vectorSearchService.search(queryVector, limit: 10);
+
+      DebugLogger().logMemory(
+        'Memory поиск завершён: найдено ${results.length} результатов',
+        level: LogLevel.info,
+      );
+
       setState(() {
         _results = results;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      DebugLogger().logMemory(
+        'Ошибка Memory поиска: $e',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -58,7 +103,24 @@ class _MemoryScreenState extends State<MemoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Поиск по заметкам и чекам')),
+      appBar: AppBar(
+        title: const Text('Память'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: 'Логи Memory',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const DebugLogScreen(initialTag: LogTag.memory),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -68,71 +130,107 @@ class _MemoryScreenState extends State<MemoryScreen> {
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: 'Что ищем?',
                       border: OutlineInputBorder(),
                     ),
                     onSubmitted: (value) => _performSearch(value),
                   ),
                 ),
+
                 IconButton(
-                  icon: Icon(Icons.search),
-                  onPressed: () => _performSearch(_searchController.text),
-                ),
-                IconButton(
-                  icon: Icon(Icons.sync),
+                  icon: const Icon(Icons.search),
+                  tooltip: 'Поиск',
                   onPressed: () {
-                    // Запуск полной индексации (спросить подтверждение)
+                    _performSearch(_searchController.text);
+                  },
+                ),
+
+                IconButton(
+                  icon: const Icon(Icons.storage),
+                  tooltip: 'Показать всю память',
+                  onPressed: () async {
+                    try {
+                      final all = await _vectorSearchService.findAll();
+
+                      DebugLogger().logMemory(
+                        'Всего эмбеддингов в базе: ${all.length}',
+                        level: LogLevel.info,
+                      );
+
+                      setState(() {
+                        _results = all;
+                      });
+                    } catch (e, stack) {
+                      DebugLogger().logMemory(
+                        'Ошибка загрузки памяти: $e',
+                        level: LogLevel.error,
+                        error: e,
+                        stackTrace: stack,
+                      );
+                    }
+                  },
+                ),
+
+                IconButton(
+                  icon: const Icon(Icons.sync),
+                  tooltip: 'Переиндексация',
+                  onPressed: () {
                     _showReindexDialog();
                   },
                 ),
               ],
             ),
           ),
-          if (_isLoading) LinearProgressIndicator(),
+
+          if (_isLoading) const LinearProgressIndicator(),
+
           if (_error != null)
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(
                 'Ошибка: $_error',
-                style: TextStyle(color: Colors.red),
+                style: const TextStyle(color: Colors.red),
               ),
             ),
+
           Expanded(
-            child: ListView.builder(
-              itemCount: _results.length,
-              itemBuilder: (context, index) {
-                final embedding = _results[index];
-                final metadata = embedding.metadata;
-                String title = '';
-                String typeLabel = '';
-                IconData icon = Icons.receipt;
+            child: _results.isEmpty
+                ? const Center(child: Text('Нет результатов'))
+                : ListView.builder(
+                    itemCount: _results.length,
+                    itemBuilder: (context, index) {
+                      final embedding = _results[index];
+                      final metadata = embedding.metadata;
 
-                if (embedding.sourceType == 'receipt') {
-                  typeLabel = 'Чек';
-                  icon = Icons.receipt;
-                  title = metadata['shop'] ?? 'Магазин';
-                } else if (embedding.sourceType == 'memory_note') {
-                  typeLabel = 'Заметка';
-                  icon = Icons.note;
-                  title = metadata['title'] ?? 'Заметка';
-                }
+                      String title = '';
+                      String typeLabel = '';
+                      IconData icon = Icons.memory;
 
-                return ListTile(
-                  leading: Icon(icon),
-                  title: Text('$typeLabel: $title'),
-                  subtitle: Text(
-                    embedding.content.length > 100
-                        ? '${embedding.content.substring(0, 100)}...'
-                        : embedding.content,
+                      if (embedding.sourceType == 'receipt') {
+                        typeLabel = 'Чек';
+                        icon = Icons.receipt;
+                        title = metadata['shop'] ?? 'Магазин';
+                      } else if (embedding.sourceType == 'memory_note') {
+                        typeLabel = 'Заметка';
+                        icon = Icons.note;
+                        title = metadata['title'] ?? 'Заметка';
+                      }
+
+                      return ListTile(
+                        leading: Icon(icon),
+                        title: Text('$typeLabel: $title'),
+                        subtitle: Text(
+                          embedding.content.length > 100
+                              ? '${embedding.content.substring(0, 100)}...'
+                              : embedding.content,
+                        ),
+                        onTap: () {
+                          _openSource(embedding.sourceType, embedding.sourceId);
+                        },
+                      );
+                    },
                   ),
-                  onTap: () {
-                    // Переход к источнику
-                    _openSource(embedding.sourceType, embedding.sourceId);
-                  },
-                );
-              },
-            ),
           ),
         ],
       ),

@@ -40,7 +40,10 @@ class BackgroundTaskManager {
       );
     }).toList();
 
-    DebugLogger.log("TASK UPDATED: $id");
+    DebugLogger().logBackground(
+      'Обновление задачи $id: ${message ?? 'без сообщения'}',
+      level: LogLevel.debug,
+    );
   }
 
   void failTask(String id, {String? message}) {
@@ -54,8 +57,15 @@ class BackgroundTaskManager {
 
   void removeTask(String id) {
     tasks.value = tasks.value.where((task) => task.id != id).toList();
-    if (tasks.value.isEmpty) _stopAnimation();
-    DebugLogger.log("TASK REMOVED: $id");
+
+    if (tasks.value.isEmpty) {
+      _stopAnimation();
+    }
+
+    DebugLogger().logBackground(
+      'Задача удалена из списка: $id',
+      level: LogLevel.debug,
+    );
   }
 
   void clearCompleted() {
@@ -101,7 +111,10 @@ class BackgroundTaskManager {
   void addTask(BackgroundTask task) {
     tasks.value = [...tasks.value, task];
     _startAnimation();
-    DebugLogger.log("TASK ADDED: ${task.title}");
+    DebugLogger().logBackground(
+      'Добавлена задача ${task.id} (${task.type}): ${task.title}',
+      level: LogLevel.info,
+    );
 
     // Если задача относится к индексации, запускаем обработку асинхронно
     if (task.type == 'memory_index' || task.type == 'memory_index_single') {
@@ -116,6 +129,10 @@ class BackgroundTaskManager {
     }
 
     try {
+      DebugLogger().logBackground(
+        'Начало обработки задачи индексации ${task.id}',
+        level: LogLevel.info,
+      );
       if (task.type == 'memory_index') {
         final sourceTypes = task.params['sourceTypes'] as List<String>?;
         final fullReindex = task.params['fullReindex'] as bool? ?? false;
@@ -171,6 +188,11 @@ class BackgroundTaskManager {
       await Future.delayed(const Duration(seconds: 3));
       removeTask(task.id);
     } catch (e) {
+      DebugLogger().logBackground(
+        'Ошибка в задаче индексации ${task.id}: $e',
+        level: LogLevel.error,
+        error: e,
+      );
       failTask(task.id, message: e.toString());
       await Future.delayed(const Duration(seconds: 2));
       removeTask(task.id);

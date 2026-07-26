@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:image_compress_plus/image_compress_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 
@@ -77,11 +77,11 @@ class ReceiptCreationService {
         message: "Сжатие изображения",
       );
 
-      final compressed = await FlutterImageCompress.compressWithFile(
-        image.path,
-        quality: 85,
-        minWidth: 2000,
-        minHeight: 2000,
+      // ✅ Исправленный блок сжатия
+      final imageFile = File(image.path);
+      final compressed = await ImageCompressPlus.compressWithFile(
+        imageFile.absolute.path,
+        quality: 80,
       );
 
       if (compressed == null) {
@@ -176,16 +176,13 @@ class ReceiptCreationService {
       await operationRepository.insertOperation(operation);
 
       if (AppSettings.autoIndexingEnabled) {
-        // Формируем контент для индексации
         final content = _buildReceiptContentForIndexing(receipt, items);
         final metadata = {
           'receiptId': receipt.id,
           'date': receipt.date.toIso8601String(),
           'shop': receipt.shop,
           'amount': receipt.amount,
-          //'category': receipt.category ?? '',
         };
-        // Запускаем задачу индексации одного чека
         BackgroundTaskManager.instance.addTask(
           BackgroundTask(
             id: 'index_receipt_${receipt.id}',
@@ -212,14 +209,11 @@ class ReceiptCreationService {
         message: "Чек готов",
       );
 
-      await Future.delayed(
-        const Duration(seconds: 3),
-      ); // даём анимации полностью дойти
+      await Future.delayed(const Duration(seconds: 3));
       BackgroundTaskManager.instance.removeTask(taskId);
     } catch (e) {
       BackgroundTaskManager.instance.failTask(taskId, message: e.toString());
       DebugLogger.log("RECEIPT ERROR: $e");
-      // Даём время на анимацию покраснения (например, 2 секунды)
       await Future.delayed(const Duration(seconds: 2));
       BackgroundTaskManager.instance.removeTask(taskId);
     }

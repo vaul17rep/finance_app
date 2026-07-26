@@ -121,14 +121,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.9"
-  dbus:
-    dependency: transitive
-    description:
-      name: dbus
-      sha256: "792974a4007974fbc5c1b5433eb2330a9db3e368c3f906253af4c007d0f49a91"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.7.13"
   equatable:
     dependency: "direct main"
     description:
@@ -161,14 +153,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
-  file_picker:
-    dependency: "direct main"
-    description:
-      name: file_picker
-      sha256: f13a03000d942e476bc1ff0a736d2e9de711d2f89a95cd4c1d88f861c3348387
-      url: "https://pub.dev"
-    source: hosted
-    version: "11.0.2"
   file_selector_linux:
     dependency: transitive
     description:
@@ -222,54 +206,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.0"
-  flutter_image_compress:
-    dependency: "direct main"
-    description:
-      name: flutter_image_compress
-      sha256: e7c48e0832f52ae65e775bf0d2324447a1781ed6d7e55a6c4136046ad44f2f22
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.5.0"
-  flutter_image_compress_common:
-    dependency: transitive
-    description:
-      name: flutter_image_compress_common
-      sha256: "10520a2d4bade23d31ba5a4b9f56fa7d11b6a62f11fe3576106c1867cc10dcf6"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
-  flutter_image_compress_macos:
-    dependency: transitive
-    description:
-      name: flutter_image_compress_macos
-      sha256: "0d2a842d2e544828fb32bda16dcfccb3149107df568898a4936d78232e486847"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
-  flutter_image_compress_ohos:
-    dependency: transitive
-    description:
-      name: flutter_image_compress_ohos
-      sha256: "1491bb7bcfdf59e3b127c263c116cfbf8ed3afade6e7fa691d9622e838ed7e48"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.3+1"
-  flutter_image_compress_platform_interface:
-    dependency: transitive
-    description:
-      name: flutter_image_compress_platform_interface
-      sha256: bbefb7967bda565004fdabdb3300dcbfb40c7ef8402675d23206e5bddc358178
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
-  flutter_image_compress_web:
-    dependency: transitive
-    description:
-      name: flutter_image_compress_web
-      sha256: "91cc58e091a1e09c7683d216d579e2b964119a8527fc43b64dfdb00f1acc94ec"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.5+1"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
@@ -377,10 +313,82 @@ packages:
     dependency: transitive
     description:
       name: image
-      sha256: "6300175e00616bbc832e2fc91bfa4d776af5402c81c7151bee6905bb08473c52"
+      sha256: f9881ff4998044947ec38d098bc7c8316ae1186fa786eddffdb867b9bc94dfce
       url: "https://pub.dev"
     source: hosted
-    version: "4.9.1"
+    version: "4.8.0"
+  image_compress_plus:
+    dependency: "direct main"
+    description:
+      name: image_compress_plus
+      sha256: d9cc60ea8a1fff5845b87b57b7002547a0fbd73f5ff6bc5f094860e408f5489c
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.0"
+  image_compress_plus_android:
+    dependency: transitive
+    description:
+      name: image_compress_plus_android
+      sha256: "00e9b56ac19fb8081919fc296c7e9867b4e93e8970c9533a27c11dcacf30c9d5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
+  image_compress_plus_ios:
+    dependency: transitive
+    description:
+      name: image_compress_plus_ios
+      sha256: "67414b904c1f5bb583576953fd6ef572491b511bd60ac551eab81482cee4c094"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
+  image_compress_plus_linux:
+    dependency: transitive
+    description:
+      name: image_compress_plus_linux
+      sha256: "8bc5735c83dc560eb041ee81b02ae56b9a8a1b48b39ed5a1342ee6b075ad06e7"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
+  image_compress_plus_macos:
+    dependency: transitive
+    description:
+      name: image_compress_plus_macos
+      sha256: "64b9d2fa9f4dc0729737c27fe0c2668a94e2b290c3769fe502f60ba0be707c45"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
+  image_compress_plus_ohos:
+    dependency: transitive
+    description:
+      name: image_compress_plus_ohos
+      sha256: "1d2e44b1a5c3f5a9c3aacdc652df60261bf3ed780cffcd1976bd038a58d34743"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.0"
+  image_compress_plus_platform_interface:
+    dependency: transitive
+    description:
+      name: image_compress_plus_platform_interface
+      sha256: "586a751bd5d2034cd5dd1537dfcc0776c291c7da8ba0e2d19a76fdbb0994e396"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
+  image_compress_plus_web:
+    dependency: transitive
+    description:
+      name: image_compress_plus_web
+      sha256: "06f09bde2018b6e57241eeca2b4f9f4bb1d700771904c625661e9f9dce8658c1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
+  image_compress_plus_windows:
+    dependency: transitive
+    description:
+      name: image_compress_plus_windows
+      sha256: d4f854184b11920ed756dc42d3e5bd0ea82a35606452754804d82896c7aa8dd1
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.0"
   image_picker:
     dependency: "direct main"
     description:
@@ -774,10 +782,10 @@ packages:
     dependency: transitive
     description:
       name: sqlite3
-      sha256: "61c7930bebf32c552ac5808c91bf33802e66711c9216090d3b5579c9f862e80c"
+      sha256: c73fd75df1332d76a6257f4823ae4df9c791f522b97e4a60cbcad214de1becf4
       url: "https://pub.dev"
     source: hosted
-    version: "3.4.0"
+    version: "3.5.0"
   stack_trace:
     dependency: transitive
     description:
@@ -806,10 +814,10 @@ packages:
     dependency: transitive
     description:
       name: synchronized
-      sha256: "93b153dcb6a26dcddee6ca087dd634b53e38c10b5aa163e8e49501a776456153"
+      sha256: "61894a1956de6b4fc1aefd0892e109514a1a706cbece3ac59decd90ff5a7a423"
       url: "https://pub.dev"
     source: hosted
-    version: "3.4.1"
+    version: "3.4.1+1"
   term_glyph:
     dependency: transitive
     description:
@@ -874,14 +882,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
-  win32:
-    dependency: transitive
-    description:
-      name: win32
-      sha256: d7cb55e04cd34096cd3a79b3330245f54cb96a370a1c27adb3c84b917de8b08e
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.15.0"
   xdg_directories:
     dependency: transitive
     description:
@@ -894,10 +894,10 @@ packages:
     dependency: transitive
     description:
       name: xml
-      sha256: "67f0aff7be013d107995e9b75bf4e7f2c3ef2dfdb2c8e68024bba0a7fd5756a4"
+      sha256: "971043b3a0d3da28727e40ed3e0b5d18b742fa5a68665cca88e74b7876d5e025"
       url: "https://pub.dev"
     source: hosted
-    version: "7.0.1"
+    version: "6.6.1"
   yaml:
     dependency: transitive
     description:

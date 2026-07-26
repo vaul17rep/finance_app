@@ -1,7 +1,10 @@
+// lib/features/navigation/main_navigation.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../home/home_screen.dart';
+import '../memory/screens/memory_screen.dart';
 import '../operations/operations_screen.dart';
 import '../accounts/accounts_screen.dart';
 
@@ -18,7 +21,13 @@ class _MainNavigationState extends State<MainNavigation> {
   final PageController _pageController = PageController();
   bool _snackBarVisible = false;
 
-  final pages = const [HomeScreen(), OperationsScreen(), AccountsScreen()];
+  // УБРАТЬ const - MemoryScreen не является константным конструктором
+  final pages = [
+    HomeScreen(),
+    MemoryScreen(), // <-- БЕЗ const
+    OperationsScreen(),
+    AccountsScreen(),
+  ];
 
   void _resetExitState() {
     _lastBackPressTime = null;
@@ -38,7 +47,6 @@ class _MainNavigationState extends State<MainNavigation> {
 
     final now = DateTime.now();
 
-    // Если SnackBar был смахнут или закрыт — сбрасываем состояние
     if (_snackBarVisible &&
         _lastBackPressTime != null &&
         now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
@@ -96,7 +104,7 @@ class _MainNavigationState extends State<MainNavigation> {
           onPageChanged: (index) {
             setState(() => currentIndex = index);
           },
-          children: pages,
+          children: pages, // <-- без const
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: currentIndex,
@@ -112,6 +120,11 @@ class _MainNavigationState extends State<MainNavigation> {
               icon: Icon(Icons.home_outlined),
               selectedIcon: Icon(Icons.home),
               label: 'Главная',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.psychology_outlined),
+              selectedIcon: Icon(Icons.psychology),
+              label: 'Память',
             ),
             NavigationDestination(
               icon: Icon(Icons.list_alt_outlined),

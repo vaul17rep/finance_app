@@ -16,7 +16,8 @@ abstract class VectorSearchService {
 
   /// Удалить все эмбеддинги.
   Future<void> deleteAll();
-
-  /// Получить все эмбеддинги (для отладки).
+  
+/// Получить все эмбеддинги.
+/// Используется для обслуживания индекса и отладки.
   Future<List<EmbeddingModel>> findAll();
 }

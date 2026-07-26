@@ -154,8 +154,82 @@ class IndexingService {
     }
   }
 
+  /// Удаляет эмбеддинги Obsidian-заметок из служебных папок.
+  ///
+  /// Удаляются записи, которые были созданы из:
+  /// .trash
+  /// .obsidian
+  /// .git
+  Future<void> cleanObsidianTrash() async {
+    DebugLogger().logMemory('Начата очистка мусорных эмбеддингов Obsidian');
+
+    try {
+      final all = await vectorSearchService.findAll();
+
+      final obsidianEmbeddings = all
+          .where((e) => e.sourceType == 'obsidian_note')
+          .toList();
+
+      DebugLogger().logMemory(
+        'Найдено Obsidian эмбеддингов: ${obsidianEmbeddings.length}',
+        level: LogLevel.debug,
+      );
+
+      int deleted = 0;
+
+      for (final embedding in obsidianEmbeddings) {
+        final path = embedding.metadata['path'] as String?;
+
+        if (path == null) {
+          continue;
+        }
+
+        final isTrash = path.contains('/.trash/');
+        final isObsidian = path.contains('/.obsidian/');
+        final isGit = path.contains('/.git/');
+
+        if (isTrash || isObsidian || isGit) {
+          await vectorSearchService.deleteBySource(
+            embedding.sourceType,
+            embedding.sourceId,
+          );
+
+          deleted++;
+
+          DebugLogger().logMemory(
+            'Удалён мусорный Obsidian embedding',
+            level: LogLevel.debug,
+            extra: {'path': path},
+          );
+        }
+      }
+
+      DebugLogger().logMemory(
+        'Очистка Obsidian завершена',
+        extra: {
+          'deleted': deleted,
+          'checked': obsidianEmbeddings.length,
+          'remaining': obsidianEmbeddings.length - deleted,
+        },
+      );
+    } catch (e, stack) {
+      DebugLogger().logMemory(
+        'Ошибка очистки Obsidian эмбеддингов',
+        level: LogLevel.error,
+        extra: {'error': e.toString()},
+        error: e,
+        stackTrace: stack,
+      );
+
+      rethrow;
+    }
+  }
+
   /// Индексация всех заметок из Obsidian vault
   Future<void> indexObsidian(String vaultPath) async {
+    // 1. Перед индексацией удаляем старые мусорные embeddings
+    await cleanObsidianTrash();
+
     DebugLogger().logMemory('Начало индексации Obsidian vault: $vaultPath');
 
     final reader = ObsidianReaderService();

@@ -16,6 +16,7 @@ import 'features/memory/services/indexing_service.dart';
 import 'features/memory/services/sqlite_vector_search_service.dart';
 import 'features/ai/ai_profiles.dart';
 import 'core/preferences/app_settings.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/navigation/main_navigation.dart';

@@ -10,17 +10,26 @@ import '../accounts/accounts_screen.dart';
 import '../memory/services/embedding_service.dart';
 import '../memory/services/vector_search_service.dart';
 import '../memory/services/indexing_service.dart';
+import '../memory/services/chunking_service.dart';
+import '../memory/services/semantic_search_service.dart';
+import '../memory/services/vector_similarity_service.dart';
 
 class MainNavigation extends StatefulWidget {
   final VectorSearchService vectorSearchService;
   final EmbeddingService embeddingService;
   final IndexingService indexingService;
+  final ChunkingService chunkingService;
+  final SemanticSearchService semanticSearchService;
+  final VectorSimilarityService vectorSimilarityService;
 
   const MainNavigation({
     super.key,
     required this.vectorSearchService,
     required this.embeddingService,
     required this.indexingService,
+    required this.chunkingService,
+    required this.semanticSearchService,
+    required this.vectorSimilarityService,
   });
 
   @override
@@ -41,6 +50,9 @@ class _MainNavigationState extends State<MainNavigation> {
       vectorSearchService: widget.vectorSearchService,
       embeddingService: widget.embeddingService,
       indexingService: widget.indexingService,
+      chunkingService: widget.chunkingService,
+      semanticSearchService: widget.semanticSearchService,
+      vectorSimilarityService: widget.vectorSimilarityService,
     ),
 
     OperationsScreen(),

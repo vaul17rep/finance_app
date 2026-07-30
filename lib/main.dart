@@ -17,6 +17,9 @@ import 'features/memory/services/sqlite_vector_search_service.dart';
 import 'features/ai/ai_profiles.dart';
 import 'core/preferences/app_settings.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'features/memory/services/chunking_service.dart';
+import 'features/memory/services/semantic_search_service.dart';
+import 'features/memory/services/vector_similarity_service.dart';
 
 import 'core/theme/app_theme.dart';
 import 'features/navigation/main_navigation.dart';
@@ -25,8 +28,17 @@ import 'core/preferences/color_settings_notifier.dart';
 import 'core/debug/debug_logger.dart';
 import 'features/memory/services/vector_search_service.dart';
 
+const bool enableDiagnostics = bool.fromEnvironment(
+  'ENABLE_DIAGNOSTICS',
+  defaultValue: false,
+);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (enableDiagnostics) {
+    debugPrint('🔬 Диагностика памяти включена');
+  }
 
   await DebugLogger().init();
 
@@ -34,6 +46,9 @@ void main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+
+  // Сначала проверяем существование таблицы
+  await _checkAndCleanEmbeddings();
 
   await DatabaseHelper.instance.debugOperationsTable();
 
@@ -47,6 +62,15 @@ void main() async {
   final openRouterService = OpenRouterService(profile: AiProfiles.paid);
   final embeddingService = EmbeddingService(openRouterService);
   final vectorSearchService = SqliteVectorSearchService(embeddingRepository);
+  final chunkingService = ChunkingService();
+  final vectorSimilarityService = const VectorSimilarityService();
+
+  final semanticSearchService = SemanticSearchService(
+    embeddingService: embeddingService,
+    vectorSearchService: vectorSearchService,
+    embeddingRepository: embeddingRepository,
+    database: await MemoryDatabase.instance.database,
+  );
 
   // 3. IndexingService
   final indexingService = IndexingService(
@@ -70,6 +94,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
+
         ChangeNotifierProvider(
           create: (_) => ColorSettingsNotifier()..loadSettings(),
         ),
@@ -78,21 +103,91 @@ void main() async {
         vectorSearchService: vectorSearchService,
         embeddingService: embeddingService,
         indexingService: indexingService,
+        chunkingService: chunkingService,
+        semanticSearchService: semanticSearchService,
+        vectorSimilarityService: vectorSimilarityService,
       ),
     ),
   );
+}
+
+/// Проверяет существование таблицы embeddings и очищает битые записи
+/// Проверяет существование таблицы embeddings и очищает битые записи
+/// Использует MemoryDatabase, а не основную БД
+Future<void> _checkAndCleanEmbeddings() async {
+  try {
+    // ✅ ИСПРАВЛЕНО: используем MemoryDatabase, а не DatabaseHelper
+    final db = await MemoryDatabase.instance.database;
+
+    // Проверяем существование таблицы
+    final result = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='embeddings'",
+    );
+    if (result.isEmpty) {
+      debugPrint('ℹ️ Таблица embeddings не существует, пропускаем очистку');
+      return;
+    }
+
+    // Проверяем наличие колонки vector
+    final columns = await db.rawQuery("PRAGMA table_info(embeddings)");
+    final hasVectorColumn = columns.any((col) => col['name'] == 'vector');
+    if (!hasVectorColumn) {
+      debugPrint('ℹ️ Колонка vector отсутствует, пропускаем очистку');
+      return;
+    }
+
+    // Удаляем битые векторы (длина не кратна 4)
+    final deleted = await db.rawDelete(
+      'DELETE FROM embeddings WHERE LENGTH(vector) % 4 != 0',
+    );
+
+    if (deleted > 0) {
+      debugPrint('🗑️ Удалено битых эмбеддингов: $deleted');
+      DebugLogger().logMemory(
+        'Удалено битых эмбеддингов: $deleted',
+        level: LogLevel.info,
+      );
+    }
+
+    // Также удаляем старые эмбеддинги из служебных папок Obsidian
+    final deletedObsidian = await db.rawDelete('''
+      DELETE FROM embeddings 
+      WHERE sourceType = 'obsidian_note' 
+      AND (sourceId LIKE '%/.trash/%' 
+        OR sourceId LIKE '%/.obsidian/%' 
+        OR sourceId LIKE '%/.git/%'
+        OR sourceId LIKE '%/.stversions/%')
+    ''');
+
+    if (deletedObsidian > 0) {
+      debugPrint('🗑️ Удалено мусорных Obsidian эмбеддингов: $deletedObsidian');
+      DebugLogger().logMemory(
+        'Удалено мусорных Obsidian эмбеддингов: $deletedObsidian',
+        level: LogLevel.info,
+      );
+    }
+  } catch (e) {
+    debugPrint('⚠️ Ошибка при очистке embeddings: $e');
+    // Не прерываем выполнение приложения
+  }
 }
 
 class FinanceApp extends StatelessWidget {
   final VectorSearchService vectorSearchService;
   final EmbeddingService embeddingService;
   final IndexingService indexingService;
+  final ChunkingService chunkingService;
+  final SemanticSearchService semanticSearchService;
+  final VectorSimilarityService vectorSimilarityService;
 
   const FinanceApp({
     super.key,
     required this.vectorSearchService,
     required this.embeddingService,
     required this.indexingService,
+    required this.chunkingService,
+    required this.semanticSearchService,
+    required this.vectorSimilarityService,
   });
 
   @override
@@ -115,6 +210,9 @@ class FinanceApp extends StatelessWidget {
         vectorSearchService: vectorSearchService,
         embeddingService: embeddingService,
         indexingService: indexingService,
+        chunkingService: chunkingService,
+        semanticSearchService: semanticSearchService,
+        vectorSimilarityService: vectorSimilarityService,
       ),
     );
   }

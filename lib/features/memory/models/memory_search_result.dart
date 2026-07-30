@@ -1,8 +1,21 @@
-import 'memory_chunk.dart';
-
 class MemorySearchResult {
-  final MemoryChunk chunk;
-  final double score;
+  final String id;
+  final String sourceType;
+  final String sourceId;
+  final String content;
+  final String title;
+  final String? preview;
+  final double similarity;
+  final Map<String, dynamic>? metadata;
 
-  const MemorySearchResult({required this.chunk, required this.score});
+  MemorySearchResult({
+    required this.id,
+    required this.sourceType,
+    required this.sourceId,
+    required this.content,
+    required this.title,
+    this.preview,
+    required this.similarity,
+    this.metadata,
+  });
 }

@@ -59,6 +59,8 @@ class LogEntry {
   final LogTag tag;
   final String message;
   final Map<String, dynamic>? extra;
+  final Object? error;
+  final StackTrace? stackTrace;
 
   const LogEntry({
     required this.timestamp,
@@ -66,6 +68,8 @@ class LogEntry {
     required this.tag,
     required this.message,
     this.extra,
+    this.error,
+    this.stackTrace,
   });
 
   String toFormattedString() {

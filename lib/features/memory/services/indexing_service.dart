@@ -14,6 +14,32 @@ import 'package:finance_app/features/memory/models/obsidian_note.dart';
 import 'package:finance_app/core/debug/debug_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+/// Результат индексации Obsidian
+class ObsidianIndexResult {
+  final int totalFiles;
+  final int successCount;
+  final int skippedCount;
+  final int errorCount;
+  final List<String> errors;
+
+  ObsidianIndexResult({
+    required this.totalFiles,
+    required this.successCount,
+    required this.skippedCount,
+    required this.errorCount,
+    this.errors = const [],
+  });
+
+  @override
+  String toString() {
+    return 'Индексация завершена\n'
+        'Всего файлов: $totalFiles\n'
+        'Успешно: $successCount\n'
+        'Пропущено (без изменений): $skippedCount\n'
+        'Ошибок: $errorCount';
+  }
+}
+
 class IndexingService {
   final ReceiptRepository receiptRepository;
   final EmbeddingService embeddingService;
@@ -46,7 +72,7 @@ class IndexingService {
     );
     if (existing != null) {
       if (existing.sourceUpdatedAt.isAfter(sourceUpdatedAt) ||
-          existing.sourceUpdatedAt == sourceUpdatedAt) {
+          existing.sourceUpdatedAt.isAtSameMomentAs(sourceUpdatedAt)) {
         return;
       }
     }
@@ -99,7 +125,7 @@ class IndexingService {
             sourceId: receipt.id,
             content: content,
             metadata: metadata,
-            sourceUpdatedAt: now, // используем текущее время
+            sourceUpdatedAt: now,
           ),
         );
       }
@@ -122,7 +148,7 @@ class IndexingService {
             sourceId: note.id,
             content: content,
             metadata: metadata,
-            sourceUpdatedAt: now, // используем текущее время
+            sourceUpdatedAt: now,
           ),
         );
       }
@@ -143,8 +169,9 @@ class IndexingService {
           sourceUpdatedAt: source.sourceUpdatedAt,
         );
       } catch (e) {
-        print(
+        DebugLogger().logMemory(
           'Ошибка индексации источника ${source.sourceType}:${source.sourceId}: $e',
+          level: LogLevel.error,
         );
       }
       processed++;
@@ -157,10 +184,8 @@ class IndexingService {
   /// Удаляет эмбеддинги Obsidian-заметок из служебных папок.
   ///
   /// Удаляются записи, которые были созданы из:
-  /// .trash
-  /// .obsidian
-  /// .git
-  Future<void> cleanObsidianTrash() async {
+  /// .trash, .obsidian, .git, .stversions
+  Future<int> cleanObsidianTrash() async {
     DebugLogger().logMemory('Начата очистка мусорных эмбеддингов Obsidian');
 
     try {
@@ -187,8 +212,9 @@ class IndexingService {
         final isTrash = path.contains('/.trash/');
         final isObsidian = path.contains('/.obsidian/');
         final isGit = path.contains('/.git/');
+        final isStversions = path.contains('/.stversions/');
 
-        if (isTrash || isObsidian || isGit) {
+        if (isTrash || isObsidian || isGit || isStversions) {
           await vectorSearchService.deleteBySource(
             embedding.sourceType,
             embedding.sourceId,
@@ -212,6 +238,8 @@ class IndexingService {
           'remaining': obsidianEmbeddings.length - deleted,
         },
       );
+
+      return deleted;
     } catch (e, stack) {
       DebugLogger().logMemory(
         'Ошибка очистки Obsidian эмбеддингов',
@@ -225,9 +253,16 @@ class IndexingService {
     }
   }
 
-  /// Индексация всех заметок из Obsidian vault
-  Future<void> indexObsidian(String vaultPath) async {
-    // 1. Перед индексацией удаляем старые мусорные embeddings
+  /// Индексация всех заметок из Obsidian vault с поддержкой:
+  /// - прогресса в UI
+  /// - пакетной обработки
+  /// - инкрементальности
+  /// - отчёта об ошибках
+  Future<ObsidianIndexResult> indexObsidian(
+    String vaultPath, {
+    Function(int processed, int total)? onProgress,
+  }) async {
+    // 1. Очистка мусорных папок перед индексацией
     await cleanObsidianTrash();
 
     DebugLogger().logMemory('Начало индексации Obsidian vault: $vaultPath');
@@ -249,7 +284,7 @@ class IndexingService {
 
       notes = await reader.readVault(vaultPath);
     } catch (e) {
-      DebugLogger().logMemory('Ошибка чтения vault: $e');
+      DebugLogger().logMemory('Ошибка чтения vault: $e', level: LogLevel.error);
       rethrow;
     }
 
@@ -257,23 +292,140 @@ class IndexingService {
       throw Exception('В Vault не найдено markdown-файлов');
     }
 
-    for (final note in notes) {
-      try {
-        await indexSource(
-          sourceType: 'obsidian_note',
-          sourceId: note.path,
-          content: note.content,
-          metadata: {'title': note.title, 'path': note.path},
-          sourceUpdatedAt: note.modifiedAt,
-        );
+    final totalFiles = notes.length;
+    int successCount = 0;
+    int skippedCount = 0;
+    int errorCount = 0;
+    final errors = <String>[];
 
-        DebugLogger().logMemory('Сохранён embedding Obsidian: ${note.path}');
-      } catch (e) {
-        DebugLogger().logMemory('Ошибка индексации Obsidian ${note.path}: $e');
+    DebugLogger().logMemory(
+      'Найдено файлов для индексации: $totalFiles',
+      level: LogLevel.info,
+    );
+
+    // 2. Пакетная обработка
+    const batchSize = 30;
+    const pauseBetweenBatches = Duration(milliseconds: 100);
+    const maxConcurrent = 5;
+
+    int processed = 0;
+
+    for (int i = 0; i < notes.length; i += batchSize) {
+      final batch = notes.skip(i).take(batchSize).toList();
+
+      // Параллельная обработка внутри пачки с ограничением параллелизма
+      final futures = <Future<void>>[];
+      final semaphore = _Semaphore(maxConcurrent);
+
+      // Собираем статистику по пачке
+      int batchSuccess = 0;
+      int batchSkipped = 0;
+      int batchErrors = 0;
+
+      for (final note in batch) {
+        futures.add(
+          semaphore.withPermit(() async {
+            try {
+              final result = await _indexObsidianNote(note);
+              if (result == _IndexResult.skipped) {
+                batchSkipped++;
+              } else if (result == _IndexResult.success) {
+                batchSuccess++;
+              }
+            } catch (e) {
+              batchErrors++;
+              final errorMsg = '${note.path}: $e';
+              errors.add(errorMsg);
+              DebugLogger().logMemory(
+                'Ошибка индексации Obsidian ${note.path}: $e',
+                level: LogLevel.error,
+              );
+            }
+          }),
+        );
+      }
+
+      await Future.wait(futures);
+
+      // Обновляем общую статистику
+      successCount += batchSuccess;
+      skippedCount += batchSkipped;
+      errorCount += batchErrors;
+      processed += batch.length;
+
+      // Отчёт о прогрессе
+      onProgress?.call(processed, totalFiles);
+
+      DebugLogger().logMemory(
+        'Obsidian пачка обработана: $processed из $totalFiles '
+        '(успешно: $batchSuccess, пропущено: $batchSkipped, ошибок: $batchErrors)',
+        level: LogLevel.debug,
+      );
+
+      // Пауза между пачками (кроме последней)
+      if (i + batchSize < notes.length) {
+        await Future.delayed(pauseBetweenBatches);
       }
     }
 
-    DebugLogger().logMemory('Индексация Obsidian завершена');
+    final result = ObsidianIndexResult(
+      totalFiles: totalFiles,
+      successCount: successCount,
+      skippedCount: skippedCount,
+      errorCount: errorCount,
+      errors: errors,
+    );
+
+    DebugLogger().logMemory(
+      'Индексация Obsidian завершена\n$result',
+      level: LogLevel.info,
+    );
+
+    return result;
+  }
+
+  /// Индексация одного Obsidian-файла с проверкой изменений
+  Future<_IndexResult> _indexObsidianNote(ObsidianNote note) async {
+    // 1. Проверка существующего эмбеддинга
+    final existing = await vectorSearchService.findBySource(
+      'obsidian_note',
+      note.path,
+    );
+
+    // 2. Инкрементальная проверка
+    if (existing != null) {
+      final existingDate = existing.sourceUpdatedAt;
+      // Если файл не изменился - пропускаем
+      if (existingDate.isAtSameMomentAs(note.modifiedAt) ||
+          existingDate.isAfter(note.modifiedAt)) {
+        DebugLogger().logMemory(
+          'Пропущен (без изменений): ${note.path}',
+          level: LogLevel.debug,
+        );
+        return _IndexResult.skipped;
+      }
+
+      DebugLogger().logMemory(
+        'Обновление изменённого файла: ${note.path}',
+        level: LogLevel.debug,
+      );
+    }
+
+    // 3. Создаём эмбеддинг
+    await indexSource(
+      sourceType: 'obsidian_note',
+      sourceId: note.path,
+      content: note.content,
+      metadata: {'title': note.title, 'path': note.path},
+      sourceUpdatedAt: note.modifiedAt,
+    );
+
+    DebugLogger().logMemory(
+      'Сохранён эмбеддинг Obsidian: ${note.path}',
+      level: LogLevel.debug,
+    );
+
+    return _IndexResult.success;
   }
 
   void scheduleIndexing({List<String>? sourceTypes, bool fullReindex = false}) {
@@ -299,6 +451,47 @@ class IndexingService {
       }
     }
     return buffer.toString();
+  }
+}
+
+/// Результат индексации одного файла
+enum _IndexResult { success, skipped }
+
+/// Семафор для ограничения параллельных операций
+class _Semaphore {
+  final int maxConcurrent;
+  int _current = 0;
+  final List<Completer<void>> _waiting = [];
+
+  _Semaphore(this.maxConcurrent);
+
+  Future<void> withPermit(Future<void> Function() action) async {
+    await _acquire();
+    try {
+      await action();
+    } finally {
+      _release();
+    }
+  }
+
+  Future<void> _acquire() async {
+    if (_current < maxConcurrent) {
+      _current++;
+      return;
+    }
+    final completer = Completer<void>();
+    _waiting.add(completer);
+    await completer.future;
+    _current++;
+  }
+
+  void _release() {
+    if (_waiting.isNotEmpty) {
+      final completer = _waiting.removeAt(0);
+      completer.complete();
+    } else {
+      _current--;
+    }
   }
 }
 

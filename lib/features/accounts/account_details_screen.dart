@@ -69,9 +69,8 @@ class _AccountDetailsScreenState extends State<AccountDetailsScreen> {
           _loading = false;
         });
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       debugPrint('AccountDetailsScreen ERROR: $e');
-      debugPrint('$stackTrace');
       if (mounted) {
         setState(() {
           _loading = false;

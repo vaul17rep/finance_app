@@ -77,6 +77,14 @@ class LogTile extends StatelessWidget {
                   // Сообщение
                   Text(entry.message, style: const TextStyle(fontSize: 13)),
                   // Дополнительные данные
+                  if (entry.error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: SelectableText(
+                        entry.error.toString(),
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
                   if (entry.extra != null && entry.extra!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),

@@ -61,6 +61,8 @@ class DebugLogger {
       tag: tag,
       message: message,
       extra: extra,
+      error: error,
+      stackTrace: stackTrace,
     );
     // Добавляем в память
     _entries.add(entry);
@@ -72,6 +74,17 @@ class DebugLogger {
     _appendToFile(entry);
     // Также печатаем в консоль для удобства
     debugPrint(entry.toFormattedString());
+    if (extra != null && extra.isNotEmpty) {
+      debugPrint('Extra: $extra');
+    }
+
+    if (error != null) {
+      debugPrint('Error: $error');
+    }
+
+    if (stackTrace != null) {
+      debugPrint(stackTrace.toString());
+    }
     // Если есть ошибка и стек, печатаем стек
     if (error != null) {
       debugPrint('Error: $error');

@@ -6,9 +6,16 @@ import 'package:finance_app/core/debug/debug_logger.dart';
 /// Важно: создаёт копию данных, чтобы избежать проблем с выравниванием.
 Uint8List vectorToBlob(List<double> vector) {
   final float32List = Float32List.fromList(vector);
-  // Создаём копию байтов с правильным выравниванием
   final bytes = float32List.buffer.asUint8List();
-  // Возвращаем копию, чтобы гарантировать правильное выравнивание
+
+  // Убеждаемся, что длина байтов кратна 4
+  if (bytes.lengthInBytes % 4 != 0) {
+    throw Exception(
+      'Некорректная длина BLOB для вектора: ${bytes.lengthInBytes} байт (должна быть кратна 4)',
+    );
+  }
+
+  // Создаём копию данных для правильного выравнивания в памяти
   return Uint8List.fromList(bytes);
 }
 

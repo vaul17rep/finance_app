@@ -1,23 +1,47 @@
-import 'package:finance_app/features/memory/models/embedding_model.dart';
 import 'dart:typed_data';
+import '../models/embedding_model.dart';
 
+/// Абстракция для векторного поиска
 abstract class VectorSearchService {
-  /// Поиск по вектору запроса. Возвращает список EmbeddingModel, отсортированный по сходству (убывание).
+  /// Поиск похожих векторов
   Future<List<EmbeddingModel>> search(Uint8List queryVector, {int limit = 10});
 
-  /// Найти эмбеддинг по источнику.
-  Future<EmbeddingModel?> findBySource(String sourceType, String sourceId);
-
-  /// Сохранить или обновить эмбеддинг.
+  /// Сохранение эмбеддинга
   Future<void> save(EmbeddingModel embedding);
 
-  /// Удалить эмбеддинг по источнику.
+  /// Найти эмбеддинг по источнику
+  /// Найти эмбеддинг по источнику
+  Future<EmbeddingModel?> findBySource(String sourceType, String sourceId);
+
+  /// Найти все эмбеддинги по источнику (для документов с чанками)
+  Future<List<EmbeddingModel>> findAllBySourceId(
+    String sourceType,
+    String sourceId,
+  );
+
+  /// Удалить все эмбеддинги источника
   Future<void> deleteBySource(String sourceType, String sourceId);
 
-  /// Удалить все эмбеддинги.
+  /// Удалить все эмбеддинги
   Future<void> deleteAll();
-  
-/// Получить все эмбеддинги.
-/// Используется для обслуживания индекса и отладки.
+
+  /// Получить все эмбеддинги
   Future<List<EmbeddingModel>> findAll();
+
+  // ===== Новые методы для поддержки миграции =====
+
+  /// Подсчёт записей по типу источника
+  Future<int> countBySourceType(String sourceType);
+
+  /// Подсчёт записей с указанным migrationId
+  Future<int> countByMigrationId(String migrationId);
+
+  /// Удаление записей с указанным migrationId
+  Future<void> deleteByMigrationId(String migrationId);
+
+  /// Очистка поля migrationId у записей
+  Future<void> clearMigrationId(String migrationId);
+
+  /// Удаление всех записей по типу источника
+  Future<void> deleteBySourceType(String sourceType);
 }

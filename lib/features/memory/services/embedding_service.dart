@@ -10,12 +10,26 @@ class EmbeddingService {
 
   /// Получить Uint8List (BLOB) для текста.
   Future<Uint8List> getEmbeddingBlob(String text, {String? model}) async {
+    // Валидация текста перед отправкой
+    final trimmedText = text.trim();
+    if (trimmedText.isEmpty) {
+      throw Exception('Пустой текст не может быть индексирован');
+    }
+    if (trimmedText.length < 3) {
+      throw Exception(
+        'Текст слишком короткий (${trimmedText.length} символов) для создания эмбеддинга',
+      );
+    }
+
     DebugLogger().logBackground(
-      'Создание embedding: длина текста=${text.length}, модель=${model ?? "default"}',
+      'Создание embedding: длина текста=${trimmedText.length}, модель=${model ?? "default"}',
       level: LogLevel.debug,
     );
 
-    final vector = await openRouterService.getEmbedding(text, model: model);
+    final vector = await openRouterService.getEmbedding(
+      trimmedText,
+      model: model,
+    );
 
     final blob = vectorToBlob(vector);
 

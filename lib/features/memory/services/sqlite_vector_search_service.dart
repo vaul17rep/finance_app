@@ -5,11 +5,68 @@ import 'package:finance_app/features/memory/repositories/embedding_repository.da
 import 'package:finance_app/features/memory/utils/vector_utils.dart';
 import 'vector_search_service.dart';
 import 'package:finance_app/core/debug/debug_logger.dart';
+import 'dart:async';
 
 class SqliteVectorSearchService implements VectorSearchService {
   final EmbeddingRepository embeddingRepository;
+  bool _initialized = false;
 
-  SqliteVectorSearchService(this.embeddingRepository);
+  SqliteVectorSearchService(this.embeddingRepository) {
+    _init();
+  }
+
+  Future<void> _init() async {
+    if (_initialized) return;
+    _initialized = true;
+    await _cleanCorruptVectors();
+  }
+
+  /// Очищает битые BLOB-векторы из базы данных.
+  ///
+  /// Векторы считаются битыми, если их размер в байтах не кратен 4
+  /// (требование Float32Array для правильного выравнивания).
+  Future<void> _cleanCorruptVectors() async {
+    DebugLogger().logMemory('Начало очистки битых BLOB-векторов');
+
+    try {
+      final embeddings = await embeddingRepository.findAll();
+      int deletedCount = 0;
+
+      for (final emb in embeddings) {
+        final size = emb.vector.lengthInBytes;
+        if (size % 4 != 0) {
+          DebugLogger().logMemory(
+            'Удалён битый embedding: id=${emb.id}, source=${emb.sourceType}:${emb.sourceId}, размер=$size байт',
+            level: LogLevel.warning,
+          );
+          await embeddingRepository.deleteBySource(
+            emb.sourceType,
+            emb.sourceId,
+          );
+          deletedCount++;
+        }
+      }
+
+      if (deletedCount > 0) {
+        DebugLogger().logMemory(
+          'Очистка завершена: удалено $deletedCount битых записей',
+          level: LogLevel.info,
+        );
+      } else {
+        DebugLogger().logMemory(
+          'Очистка завершена: битых записей не найдено',
+          level: LogLevel.debug,
+        );
+      }
+    } catch (e, stack) {
+      DebugLogger().logMemory(
+        'Ошибка при очистке битых BLOB-векторов',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+    }
+  }
 
   @override
   Future<EmbeddingModel?> findBySource(
@@ -53,10 +110,27 @@ class SqliteVectorSearchService implements VectorSearchService {
 
       if (size % 4 != 0) {
         DebugLogger().logMemory(
-          'Пропущен битый embedding: '
+          'Обнаружен и удалён битый embedding: '
           'id=${emb.id}, '
           'размер=$size байт',
           level: LogLevel.warning,
+        );
+        // Асинхронно удаляем битую запись (не блокируем текущий поиск)
+        unawaited(
+          embeddingRepository
+              .deleteBySource(emb.sourceType, emb.sourceId)
+              .then(
+                (_) => DebugLogger().logMemory(
+                  'Битый embedding удалён: id=${emb.id}',
+                  level: LogLevel.debug,
+                ),
+              )
+              .catchError(
+                (e) => DebugLogger().logMemory(
+                  'Ошибка удаления битого embedding: $e',
+                  level: LogLevel.error,
+                ),
+              ),
         );
         continue;
       }
@@ -66,7 +140,7 @@ class SqliteVectorSearchService implements VectorSearchService {
 
         final similarity = cosineSimilarity(query, vector);
         DebugLogger().logMemory(
-          'Сходство ${emb.sourceId}: $similarity',
+          'Сходство ${emb.sourceId} (${emb.metadata['chunkIndex'] ?? 0}): $similarity',
           level: LogLevel.debug,
         );
 
@@ -87,10 +161,28 @@ class SqliteVectorSearchService implements VectorSearchService {
 
     scored.sort((a, b) => b.similarity.compareTo(a.similarity));
 
-    final top = scored.take(limit).map((s) => s.embedding).toList();
+    // Группировка результатов по sourceId (документу)
+    // Для каждого документа выбираем чанк с максимальной схожестью
+    final groupedBySourceId = <String, _ScoredEmbedding>{};
+    for (final scoredItem in scored) {
+      final sourceId = scoredItem.embedding.sourceId;
+      if (!groupedBySourceId.containsKey(sourceId)) {
+        groupedBySourceId[sourceId] = scoredItem;
+      } else if (scoredItem.similarity >
+          groupedBySourceId[sourceId]!.similarity) {
+        groupedBySourceId[sourceId] = scoredItem;
+      }
+    }
+
+    final groupedResults = groupedBySourceId.values.toList();
+    groupedResults.sort((a, b) => b.similarity.compareTo(a.similarity));
+
+    final top = groupedResults.take(limit).map((s) => s.embedding).toList();
 
     DebugLogger().logMemory(
-      'Vector поиск завершён: возвращено ${top.length}',
+      'Vector поиск завершён: найдено ${scored.length} кандидатов, '
+      'сгруппировано в ${groupedResults.length} документов, '
+      'возвращено ${top.length}',
       level: LogLevel.info,
     );
 
@@ -117,7 +209,88 @@ class SqliteVectorSearchService implements VectorSearchService {
     return await embeddingRepository.findAll();
   }
 
-  // Косинусное сходство двух векторов
+  // ===== Новые методы для поддержки миграции =====
+
+  @override
+  Future<int> countBySourceType(String sourceType) async {
+    final all = await embeddingRepository.findAll();
+    return all.where((e) => e.sourceType == sourceType).length;
+  }
+
+  @override
+  Future<int> countByMigrationId(String migrationId) async {
+    final all = await embeddingRepository.findAll();
+    return all.where((e) => e.metadata['migrationId'] == migrationId).length;
+  }
+
+  @override
+  Future<void> deleteByMigrationId(String migrationId) async {
+    final all = await embeddingRepository.findAll();
+    final toDelete = all
+        .where((e) => e.metadata['migrationId'] == migrationId)
+        .toList();
+    for (final emb in toDelete) {
+      await embeddingRepository.deleteBySource(emb.sourceType, emb.sourceId);
+    }
+    DebugLogger().logMemory(
+      'Удалено ${toDelete.length} записей с migrationId=$migrationId',
+      level: LogLevel.info,
+    );
+  }
+
+  @override
+  Future<void> clearMigrationId(String migrationId) async {
+    // Получаем все записи с этим migrationId
+    final all = await embeddingRepository.findAll();
+    final toUpdate = all
+        .where((e) => e.metadata['migrationId'] == migrationId)
+        .toList();
+
+    for (final emb in toUpdate) {
+      // Создаём копию metadata без migrationId
+      final newMetadata = Map<String, dynamic>.from(emb.metadata);
+      newMetadata.remove('migrationId');
+
+      // Обновляем запись
+      final updated = emb.copyWith(
+        metadata: newMetadata,
+        updatedAt: DateTime.now(),
+      );
+      await embeddingRepository.save(updated);
+    }
+
+    DebugLogger().logMemory(
+      'Очищено поле migrationId у ${toUpdate.length} записей',
+      level: LogLevel.info,
+    );
+  }
+
+  @override
+  Future<void> deleteBySourceType(String sourceType) async {
+    final all = await embeddingRepository.findAll();
+    final toDelete = all.where((e) => e.sourceType == sourceType).toList();
+    for (final emb in toDelete) {
+      await embeddingRepository.deleteBySource(emb.sourceType, emb.sourceId);
+    }
+    DebugLogger().logMemory(
+      'Удалено ${toDelete.length} записей с sourceType=$sourceType',
+      level: LogLevel.info,
+    );
+  }
+
+  @override
+  Future<List<EmbeddingModel>> findAllBySourceId(
+    String sourceType,
+    String sourceId,
+  ) async {
+    final all = await embeddingRepository.findAll();
+    return all
+        .where((e) => e.sourceType == sourceType && e.sourceId == sourceId)
+        .toList();
+  }
+
+  // ===== Вспомогательные методы =====
+
   double cosineSimilarity(List<double> a, List<double> b) {
     if (a.isEmpty || b.isEmpty || a.length != b.length) return 0.0;
     double dot = 0.0, normA = 0.0, normB = 0.0;
@@ -127,7 +300,6 @@ class SqliteVectorSearchService implements VectorSearchService {
       normB += b[i] * b[i];
     }
     if (normA == 0.0 || normB == 0.0) return 0.0;
-    // Исправлено: sqrt(normA) вместо normA.sqrt()
     return dot / (sqrt(normA) * sqrt(normB));
   }
 }

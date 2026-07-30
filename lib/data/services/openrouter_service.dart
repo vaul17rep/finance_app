@@ -40,15 +40,40 @@ class OpenRouterService {
     );
 
     if (response.statusCode != 200) {
+      // Логируем полный ответ для диагностики
+      final responseBody = response.body;
       DebugLogger().logAi(
         'Ошибка эмбеддинга: ${response.statusCode}',
         level: LogLevel.error,
+        extra: {
+          'statusCode': response.statusCode,
+          'responseBody': responseBody,
+        },
       );
+
+      // Для 403 логируем детально
+      if (response.statusCode == 403) {
+        try {
+          final body = jsonDecode(responseBody);
+          DebugLogger().logAi(
+            '403 Forbidden детали: ${body['error'] ?? body}',
+            level: LogLevel.warning,
+            extra: {'fullResponse': responseBody},
+          );
+        } catch (_) {
+          DebugLogger().logAi(
+            '403 Forbidden тело ответа: $responseBody',
+            level: LogLevel.warning,
+          );
+        }
+        throw Exception('OpenRouter 403 Forbidden: $responseBody');
+      }
+
       if (response.statusCode == 429) {
         AiKeyManager.markFailed(selectedApiKey);
       }
       if (response.statusCode == 402) {
-        final body = jsonDecode(response.body);
+        final body = jsonDecode(responseBody);
         final message = body['error']['message'] ?? '';
         final match = RegExp(r'only afford (\d+)').firstMatch(message);
         final available = match != null ? int.parse(match.group(1)!) : 1000;

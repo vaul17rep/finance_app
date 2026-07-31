@@ -5,16 +5,11 @@ import 'package:finance_app/features/memory/models/embedding_model.dart';
 import 'package:finance_app/features/memory/services/indexing_service.dart';
 import 'package:finance_app/core/debug/debug_logger.dart';
 import 'package:finance_app/features/debug/screens/debug_log_screen.dart';
-import 'package:finance_app/core/preferences/app_settings.dart';
-import 'dart:io';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:finance_app/features/memory/diagnostics/memory_diagnostic_service.dart';
 import 'package:finance_app/features/memory/diagnostics/widgets/diagnostic_button.dart';
-import 'package:provider/provider.dart';
 import 'package:finance_app/features/memory/services/chunking_service.dart';
 import 'package:finance_app/features/memory/services/semantic_search_service.dart';
 import 'package:finance_app/features/memory/services/vector_similarity_service.dart';
-import 'package:finance_app/data/database/database_helper.dart';
 // ✅ ДОБАВЛЯЕМ импорт MemoryDatabase
 import 'package:finance_app/data/database/memory_database.dart';
 
@@ -40,7 +35,7 @@ class MemoryScreen extends StatefulWidget {
   State<MemoryScreen> createState() => _MemoryScreenState();
 }
 
-const bool ENABLE_DIAGNOSTICS = bool.fromEnvironment('ENABLE_DIAGNOSTICS');
+const bool enableDiagnostics = bool.fromEnvironment('ENABLE_DIAGNOSTICS');
 
 class _MemoryScreenState extends State<MemoryScreen> {
   final TextEditingController _searchController = TextEditingController();
@@ -50,17 +45,17 @@ class _MemoryScreenState extends State<MemoryScreen> {
   bool _isIndexingObsidian = false;
 
   // Прогресс индексации
+  // ignore: prefer_final_fields
   int _indexedFiles = 0;
+  // ignore: prefer_final_fields
   int _totalFiles = 0;
   bool _showProgress = false;
+  bool _isPaused = false;
 
   // Инжектируем зависимости (через provider, getIt или параметры)
   late final VectorSearchService _vectorSearchService;
   late final EmbeddingService _embeddingService;
   late final IndexingService _indexingService;
-  late final ChunkingService _chunkingService;
-  late final SemanticSearchService _semanticSearchService;
-  late final VectorSimilarityService _vectorSimilarityService;
 
   @override
   void initState() {
@@ -69,9 +64,6 @@ class _MemoryScreenState extends State<MemoryScreen> {
     _vectorSearchService = widget.vectorSearchService;
     _embeddingService = widget.embeddingService;
     _indexingService = widget.indexingService;
-    _chunkingService = widget.chunkingService;
-    _semanticSearchService = widget.semanticSearchService;
-    _vectorSimilarityService = widget.vectorSimilarityService;
 
     // Проверяем существование таблицы embeddings
     _ensureEmbeddingsTable();
@@ -220,16 +212,15 @@ class _MemoryScreenState extends State<MemoryScreen> {
       );
 
       if (tableExists.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Таблица эмбеддингов ещё не создана. Сначала выполните индексацию.',
-              ),
-              backgroundColor: Colors.orange,
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Таблица эмбеддингов ещё не создана. Сначала выполните индексацию.',
             ),
-          );
-        }
+            backgroundColor: Colors.orange,
+          ),
+        );
         setState(() {
           _isLoading = false;
         });
@@ -241,14 +232,13 @@ class _MemoryScreenState extends State<MemoryScreen> {
       final hasVectorColumn = columns.any((col) => col['name'] == 'vector');
 
       if (!hasVectorColumn) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Таблица эмбеддингов не содержит колонку vector.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Таблица эмбеддингов не содержит колонку vector.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
         setState(() {
           _isLoading = false;
         });
@@ -262,14 +252,13 @@ class _MemoryScreenState extends State<MemoryScreen> {
       final count = countResult.first['count'] as int? ?? 0;
 
       if (count == 0) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Битых эмбеддингов не найдено'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Битых эмбеддингов не найдено'),
+            backgroundColor: Colors.green,
+          ),
+        );
         setState(() {
           _isLoading = false;
         });
@@ -292,19 +281,18 @@ class _MemoryScreenState extends State<MemoryScreen> {
         _isLoading = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Удалено битых эмбеддингов: $deleted'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Удалено битых эмбеддингов: $deleted'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
 
-        // Предлагаем переиндексацию
-        if (deleted > 0) {
-          _showReindexAfterCleanDialog(deleted);
-        }
+      // Предлагаем переиндексацию
+      if (deleted > 0) {
+        _showReindexAfterCleanDialog(deleted);
       }
     } catch (e, stack) {
       DebugLogger().logMemory(
@@ -319,15 +307,116 @@ class _MemoryScreenState extends State<MemoryScreen> {
         _isLoading = false;
       });
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Ошибка очистки: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Ошибка очистки: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  }
+
+  void _showIndexingControlDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Управление индексацией'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Прогресс: $_indexedFiles из $_totalFiles',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _isPaused ? '⏸ Приостановлено' : '▶ Выполняется',
+              style: TextStyle(
+                color: _isPaused ? Colors.orange : Colors.green,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton(
+                  onPressed: _isPaused
+                      ? () async {
+                          await widget.indexingService.resumeIndexing();
+                          if (!ctx.mounted) return;
+                          setState(() => _isPaused = false);
+                          Navigator.pop(ctx);
+                        }
+                      : null,
+                  child: const Text('▶ Возобновить'),
+                ),
+                ElevatedButton(
+                  onPressed: !_isPaused
+                      ? () async {
+                          await widget.indexingService.pauseIndexing();
+                          if (!ctx.mounted) return;
+                          setState(() => _isPaused = true);
+                          Navigator.pop(ctx);
+                        }
+                      : null,
+                  child: const Text('⏸ Пауза'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: ctx,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Отменить индексацию?'),
+                        content: const Text(
+                          'Прогресс будет потерян. Продолжить?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Нет'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                            ),
+                            child: const Text('Да, отменить'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await widget.indexingService.cancelIndexing();
+                      if (!ctx.mounted) return;
+                      setState(() {
+                        _isIndexingObsidian = false;
+                        _isPaused = false;
+                        _showProgress = false;
+                      });
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('⏹ Отмена'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Закрыть'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Диалог предложения переиндексации после очистки
@@ -349,6 +438,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
+              if (!mounted) return;
               _showReindexDialog();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.blue),
@@ -360,7 +450,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
   }
 
   Widget _buildDiagnosticButton() {
-    if (!ENABLE_DIAGNOSTICS) {
+    if (!enableDiagnostics) {
       return const SizedBox.shrink();
     }
 
@@ -421,21 +511,43 @@ class _MemoryScreenState extends State<MemoryScreen> {
             const Text('Память'),
             if (_showProgress) ...[
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '$_indexedFiles / $_totalFiles',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
+              GestureDetector(
+                onTap: _showIndexingControlDialog,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isIndexingObsidian && !_isPaused)
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      if (_isIndexingObsidian && !_isPaused)
+                        const SizedBox(width: 6),
+                      Text(
+                        '$_indexedFiles / $_totalFiles',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ],
         ),
         actions: [
-          // КНОПКА ОЧИСТКИ БИТЫХ ЭМБЕДДИНГОВ
           IconButton(
             icon: const Icon(Icons.cleaning_services),
             tooltip: 'Очистить битые эмбеддинги',
@@ -454,22 +566,6 @@ class _MemoryScreenState extends State<MemoryScreen> {
                 ),
               );
             },
-          ),
-          if (_isIndexingObsidian)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8.0),
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
-          IconButton(
-            icon: _isIndexingObsidian
-                ? const SizedBox.shrink()
-                : const Icon(Icons.folder_open),
-            tooltip: 'Индексировать Obsidian',
-            onPressed: _isIndexingObsidian ? null : _onIndexObsidianPressed,
           ),
         ],
       ),
@@ -589,137 +685,6 @@ class _MemoryScreenState extends State<MemoryScreen> {
                     },
                   ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _onIndexObsidianPressed() async {
-    final permission = await Permission.manageExternalStorage.status;
-
-    DebugLogger().logMemory('MANAGE_EXTERNAL_STORAGE: $permission');
-    if (Platform.isAndroid) {
-      final status = await Permission.manageExternalStorage.status;
-
-      if (!status.isGranted) {
-        final result = await Permission.manageExternalStorage.request();
-
-        if (!result.isGranted) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Нужно разрешение на доступ ко всем файлам'),
-              ),
-            );
-          }
-          return;
-        }
-      }
-    }
-
-    final vaultPath = await AppSettings.getObsidianVaultPath();
-
-    if (vaultPath == null || vaultPath.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Сначала выберите папку Obsidian Vault в настройках'),
-          ),
-        );
-      }
-      return;
-    }
-
-    setState(() {
-      _isIndexingObsidian = true;
-      _showProgress = true;
-      _indexedFiles = 0;
-      _totalFiles = 0;
-    });
-
-    try {
-      final result = await _indexingService.indexObsidian(
-        vaultPath,
-        onProgress: (processed, total) {
-          if (mounted) {
-            setState(() {
-              _indexedFiles = processed;
-              _totalFiles = total;
-            });
-          }
-        },
-      );
-
-      if (mounted) {
-        _showIndexResultDialog(result);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Ошибка индексации: $e')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isIndexingObsidian = false;
-          _showProgress = false;
-        });
-      }
-    }
-  }
-
-  void _showIndexResultDialog(ObsidianIndexResult result) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Индексация завершена'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Всего файлов: ${result.totalFiles}'),
-            Text('Успешно: ${result.successCount}'),
-            Text('Пропущено (без изменений): ${result.skippedCount}'),
-            if (result.errorCount > 0) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Ошибок: ${result.errorCount}',
-                style: const TextStyle(color: Colors.red),
-              ),
-              const SizedBox(height: 8),
-              if (result.errors.isNotEmpty)
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      result.errors.join('\n'),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Закрыть'),
-          ),
-          if (result.errorCount > 0)
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const DebugLogScreen(initialTag: LogTag.memory),
-                  ),
-                );
-              },
-              child: const Text('Посмотреть логи'),
-            ),
         ],
       ),
     );

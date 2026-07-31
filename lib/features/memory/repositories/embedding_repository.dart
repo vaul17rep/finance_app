@@ -6,13 +6,14 @@ class EmbeddingRepository {
 
   EmbeddingRepository(this.db);
 
+  // --- Старая таблица embeddings ---
+
   Future<void> save(EmbeddingModel embedding) async {
     final existing = await db.getEmbeddingBySource(
       embedding.sourceType,
       embedding.sourceId,
     );
     if (existing != null) {
-      // Если изменился sourceUpdatedAt, обновляем
       if (embedding.sourceUpdatedAt.isAfter(existing.sourceUpdatedAt) ||
           embedding.embeddingUpdatedAt.isAfter(existing.embeddingUpdatedAt)) {
         await db.updateEmbedding(embedding);
@@ -41,15 +42,57 @@ class EmbeddingRepository {
     return await db.countIndexedSources();
   }
 
-  // Получить все эмбеддинги для поиска (можно оптимизировать, если таблица большая)
-  // Для поиска загружаем все векторы в память.
   Future<List<EmbeddingModel>> findAllForSearch() async {
     return await db.getAllEmbeddings();
   }
 
-  // Удалить все записи (для полной переиндексации)
   Future<void> deleteAll() async {
     final db = await MemoryDatabase.instance.database;
     await db.delete('embeddings');
+  }
+
+  // --- Новая таблица embeddings_vec ---
+
+  Future<void> saveVec(EmbeddingModel embedding) async {
+    final existing = await db.getEmbeddingVecBySource(
+      embedding.sourceType,
+      embedding.sourceId,
+    );
+    if (existing != null) {
+      if (embedding.sourceUpdatedAt.isAfter(existing.sourceUpdatedAt) ||
+          embedding.embeddingUpdatedAt.isAfter(existing.embeddingUpdatedAt)) {
+        await db.updateEmbeddingVec(embedding);
+      }
+    } else {
+      await db.insertEmbeddingVec(embedding);
+    }
+  }
+
+  Future<void> deleteVecBySource(String sourceType, String sourceId) async {
+    await db.deleteEmbeddingsVecBySource(sourceType, sourceId);
+  }
+
+  Future<List<EmbeddingModel>> findAllVec() async {
+    return await db.getAllEmbeddingsVec();
+  }
+
+  Future<EmbeddingModel?> findBySourceVec(
+    String sourceType,
+    String sourceId,
+  ) async {
+    return await db.getEmbeddingVecBySource(sourceType, sourceId);
+  }
+
+  Future<List<EmbeddingModel>> findAllVecForSearch() async {
+    return await db.getAllEmbeddingsVec();
+  }
+
+  Future<int> countVec() async {
+    return await db.countEmbeddingsVec();
+  }
+
+  Future<void> deleteAllVec() async {
+    final db = await MemoryDatabase.instance.database;
+    await db.delete('embeddings_vec');
   }
 }

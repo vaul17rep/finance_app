@@ -1,3 +1,8 @@
+/// Сервис для чтения файлов Obsidian Vault.
+/// Отвечает за обход директорий, фильтрацию служебных папок и файлов,
+/// а также проверку размера файлов (пропускает файлы > 5 МБ).
+library;
+
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/obsidian_note.dart';
@@ -6,7 +11,10 @@ import '../../../core/debug/debug_logger.dart';
 class ObsidianReaderService {
   final _logger = DebugLogger();
 
-  /// Получить список всех .md файлов в vault и создать ObsidianNote
+  /// Максимальный размер файла для индексации (5 МБ).
+  static const int maxFileSizeBytes = 5 * 1024 * 1024;
+
+  /// Получить список всех .md файлов в vault и создать ObsidianNote.
   Future<List<ObsidianNote>> readVault(String vaultPath) async {
     final directory = Directory(vaultPath);
     debugPrint('VAULT EXISTS: ${await directory.exists()}');
@@ -33,6 +41,17 @@ class ObsidianReaderService {
 
     for (final file in files) {
       try {
+        // Проверка размера файла
+        final stat = await file.stat();
+        if (stat.size > maxFileSizeBytes) {
+          _logger.logMemory(
+            '⚠️ Файл пропущен (превышен лимит размера): ${file.path} '
+            '(размер: ${(stat.size / 1024 / 1024).toStringAsFixed(1)} МБ)',
+            level: LogLevel.warning,
+          );
+          continue;
+        }
+
         final rawContent = await file.readAsString();
         final modifiedAt = await file.lastModified();
         final note = ObsidianNote.fromFile(

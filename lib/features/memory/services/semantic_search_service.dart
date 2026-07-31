@@ -5,20 +5,21 @@ import 'embedding_service.dart';
 import 'vector_search_service.dart';
 import '../utils/vector_utils.dart';
 import '../models/embedding_model.dart';
+import '/../core/debug/debug_logger.dart';
 
 class SemanticSearchService {
   final EmbeddingService _embeddingService;
-  final VectorSearchService _vectorSearchService;
+  final VectorSearchService _legacyService;
   final EmbeddingRepository _embeddingRepository;
   final Database _database;
 
   SemanticSearchService({
     required EmbeddingService embeddingService,
-    required VectorSearchService vectorSearchService,
+    required VectorSearchService legacyService,
     required EmbeddingRepository embeddingRepository,
     required Database database,
   }) : _embeddingService = embeddingService,
-       _vectorSearchService = vectorSearchService,
+       _legacyService = legacyService,
        _embeddingRepository = embeddingRepository,
        _database = database;
 
@@ -33,24 +34,37 @@ class SemanticSearchService {
     final queryVector = await _embeddingService.getEmbeddingVector(query);
     if (queryVector.isEmpty) return [];
 
-    // Преобразуем List<double> в Uint8List через vectorToBlob
     final queryBlob = vectorToBlob(queryVector);
 
-    final results = await _vectorSearchService.search(queryBlob, limit: limit);
+    DebugLogger().logMemory(
+      '🔍 Поиск через старый движок (in-memory): limit=$limit',
+      level: LogLevel.debug,
+    );
+
+    List<EmbeddingModel> results = [];
+    try {
+      results = await _legacyService.search(queryBlob, limit: limit);
+    } catch (e) {
+      DebugLogger().logMemory('❌ Ошибка при поиске: $e', level: LogLevel.error);
+      return [];
+    }
 
     // Обогащаем результаты
     final enrichedResults = <MemorySearchResult>[];
     for (final result in results) {
-      // Фильтрация по sourceTypes
       if (sourceTypes != null && !sourceTypes.contains(result.sourceType)) {
         continue;
       }
-      // Фильтрация по minSimilarity будет выполняться внутри VectorSearchService
       final enriched = await _enrichResult(result);
       if (enriched != null) {
         enrichedResults.add(enriched);
       }
     }
+
+    DebugLogger().logMemory(
+      '✅ Найдено результатов: ${enrichedResults.length}',
+      level: LogLevel.info,
+    );
 
     return enrichedResults;
   }
@@ -100,7 +114,6 @@ class SemanticSearchService {
           );
       }
 
-      // Преобразуем EmbeddingModel в MemorySearchResult
       return MemorySearchResult(
         id: result.id,
         sourceType: result.sourceType,

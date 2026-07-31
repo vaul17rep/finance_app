@@ -1,3 +1,7 @@
+/// Менеджер фоновых задач для отображения прогресса в UI.
+/// Отвечает за создание, обновление и удаление задач.
+/// Добавлен статус paused для поддержки приостановки индексации.
+library;
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'background_task.dart';

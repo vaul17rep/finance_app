@@ -1,71 +1,76 @@
+/// Сервис для разбивки текста на чанки (части) для индексации.
+/// Использует символьную разбивку с порогом 8000 символов и перекрытием 200.
+/// Старается заканчивать чанки на границе предложений для улучшения качества поиска.
+library;
+
 import '../models/memory_chunk.dart';
 
 class ChunkingService {
-  final int chunkSize;
-  final int overlap;
+  final int maxChunkChars;
+  final int overlapChars;
 
-  ChunkingService({this.chunkSize = 512, this.overlap = 64})
-    : assert(chunkSize > overlap, 'chunkSize должен быть больше overlap');
+  ChunkingService({this.maxChunkChars = 8000, this.overlapChars = 200})
+    : assert(maxChunkChars > overlapChars);
 
-  /// Разбивает текст на список MemoryChunk
+  /// Разбивает текст на список MemoryChunk.
   Future<List<MemoryChunk>> chunk(String text) async {
     if (text.isEmpty) return [];
 
     final chunks = <MemoryChunk>[];
-    final words = text.split(' ');
-    final totalWords = words.length;
+    final length = text.length;
 
-    if (totalWords <= chunkSize) {
-      chunks.add(MemoryChunk(id: 'chunk_0', content: text, index: 0));
+    if (length <= maxChunkChars) {
+      final chunkText = text.trim();
+      if (chunkText.isNotEmpty) {
+        chunks.add(
+          MemoryChunk(
+            id: 'chunk_0_${DateTime.now().millisecondsSinceEpoch}',
+            content: chunkText,
+            index: 0,
+          ),
+        );
+      }
       return chunks;
     }
 
     int start = 0;
     int chunkIndex = 0;
 
-    while (start < totalWords) {
-      int end = (start + chunkSize).clamp(0, totalWords);
+    while (start < length) {
+      int end = (start + maxChunkChars).clamp(0, length);
 
-      // Если это не последний чанк, стараемся закончить на границе предложения
-      if (end < totalWords) {
-        // Ищем точку, вопросительный или восклицательный знак в пределах последних 50 слов
-        final searchStart = (end - 50).clamp(0, totalWords);
-        final segment = words.sublist(searchStart, end).join(' ');
+      // Если не конец текста, стараемся закончить на границе предложения
+      if (end < length) {
+        final searchStart = (end - 200).clamp(0, length);
+        final segment = text.substring(searchStart, end);
         final punctIndex = _findSentenceBoundary(segment);
-
         if (punctIndex != -1) {
-          final wordsInSegment = segment
-              .substring(0, punctIndex + 1)
-              .split(' ')
-              .length;
-          end = searchStart + wordsInSegment;
+          end = searchStart + punctIndex + 1;
         }
       }
 
-      final chunkText = words.sublist(start, end).join(' ');
-      if (chunkText.trim().isNotEmpty) {
+      final chunkText = text.substring(start, end).trim();
+      if (chunkText.isNotEmpty) {
         chunks.add(
           MemoryChunk(
             id: 'chunk_${chunkIndex}_${DateTime.now().millisecondsSinceEpoch}',
-            content: chunkText.trim(),
+            content: chunkText,
             index: chunkIndex,
           ),
         );
         chunkIndex++;
       }
 
-      // Следующий старт с учётом overlap
-      start = end - overlap;
+      // Следующий старт с перекрытием
+      start = end - overlapChars;
       if (start < 0) start = 0;
-
-      // Защита от бесконечного цикла
       if (start >= end) break;
     }
 
     return chunks;
   }
 
-  /// Разбивает текст на чанки с метаданными источника
+  /// Разбивает текст с метаданными источника.
   Future<List<MemoryChunk>> chunkWithSource({
     required String text,
     required String sourceType,

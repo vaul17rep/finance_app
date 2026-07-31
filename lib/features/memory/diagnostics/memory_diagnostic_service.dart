@@ -35,8 +35,6 @@ class MemoryDiagnosticService {
   final HealthScoreCalculator _healthCalculator = HealthScoreCalculator();
   final MarkdownReportGenerator _reportGenerator = MarkdownReportGenerator();
 
-  // features/memory/diagnostics/memory_diagnostic_service.dart
-
   static Future<MemoryDiagnosticService> createWithAllChecks({
     required Database database,
     required EmbeddingService embeddingService,
@@ -125,8 +123,47 @@ class MemoryDiagnosticService {
           },
         );
 
-        // Агрегируем метрики из результатов
-        // TODO: реализовать агрегацию метрик из результатов проверок
+        // Агрегируем метрики из результатов проверок
+        switch (result.checkName) {
+          case 'CountCheck':
+            totalEmbeddings = result.affectedCount ?? 0;
+            break;
+          case 'EmptyVectorCheck':
+            emptyVectors = result.affectedCount ?? 0;
+            break;
+          case 'InvalidVectorCheck':
+            invalidVectors = result.affectedCount ?? 0;
+            break;
+          case 'DimensionCheck':
+            if (result.metrics != null && result.metrics!.isNotEmpty) {
+              avgDimension = result.metrics!['avg'] ?? 1536;
+              minDimension = result.metrics!['min'] ?? 1536;
+              maxDimension = result.metrics!['max'] ?? 1536;
+            }
+            break;
+          case 'DuplicateCheck':
+            duplicates = result.affectedCount ?? 0;
+            break;
+          case 'StaleCheck':
+            staleEmbeddings = result.affectedCount ?? 0;
+            break;
+          case 'SimilarityCheck':
+            if (result.metrics != null && result.metrics!.isNotEmpty) {
+              avgCosineSimilarity = result.metrics!['avgSimilarity'] ?? 0.0;
+            }
+            break;
+          case 'SearchQualityCheck':
+            if (result.metrics != null && result.metrics!.isNotEmpty) {
+              top1Accuracy = result.metrics!['top1'] ?? 0.0;
+              top3Accuracy = result.metrics!['top3'] ?? 0.0;
+            }
+            break;
+          case 'PerformanceCheck':
+            if (result.metrics != null && result.metrics!.isNotEmpty) {
+              avgSearchTimeMs = result.metrics!['avgTimeMs'] ?? 0;
+            }
+            break;
+        }
       } catch (e, stack) {
         errors.add(
           DiagnosticError(
@@ -148,7 +185,7 @@ class MemoryDiagnosticService {
     final endTime = DateTime.now();
     final totalDurationMs = endTime.difference(startTime).inMilliseconds;
 
-    // TODO: собрать реальные метрики из результатов проверок
+    // Собираем реальные метрики из результатов проверок
     final metrics = DiagnosticMetrics(
       totalEmbeddings: totalEmbeddings,
       bySourceType: bySourceType,

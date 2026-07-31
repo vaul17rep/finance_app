@@ -1,4 +1,5 @@
-enum BackgroundTaskStatus { waiting, processing, completed, failed }
+library;
+enum BackgroundTaskStatus { waiting, processing, completed, failed, paused }
 
 class BackgroundTask {
   final String id;

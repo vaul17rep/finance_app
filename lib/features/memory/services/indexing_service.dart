@@ -1,6 +1,12 @@
+/// Сервис индексации для системы знаний.
+/// Отвечает за координацию индексации различных источников (чеки, заметки, Obsidian).
+/// Теперь использует IndexingQueue для управляемой обработки, сохраняет состояние
+/// в таблицу indexing_state для возобновления после перезапуска, и собирает
+/// метрики пикового потребления памяти для диагностики OOM.
+library;
+
 import 'dart:async';
 import 'dart:io';
-import 'package:finance_app/data/database/database_helper.dart';
 import 'package:finance_app/data/repositories/receipt_repository.dart';
 import 'package:finance_app/data/services/background_manager/background_task.dart';
 import 'package:finance_app/data/services/background_manager/background_task_manager.dart';
@@ -15,9 +21,13 @@ import 'package:finance_app/models/receipt_item.dart';
 import 'package:finance_app/features/memory/services/obsidian_reader_service.dart';
 import 'package:finance_app/features/memory/models/obsidian_note.dart';
 import 'package:finance_app/core/debug/debug_logger.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:finance_app/features/memory/repositories/embedding_repository.dart';
+import 'package:finance_app/core/preferences/app_settings.dart';
+// Новые импорты
+import 'package:finance_app/features/memory/models/indexing_state.dart';
+import 'package:finance_app/features/memory/repositories/indexing_state_repository.dart';
+import 'package:finance_app/features/memory/services/indexing_queue.dart';
 
 /// Результат индексации Obsidian
 class ObsidianIndexResult {
@@ -75,15 +85,24 @@ class IndexingService {
   final ReceiptRepository receiptRepository;
   final EmbeddingService embeddingService;
   final VectorSearchService vectorSearchService;
+  final EmbeddingRepository embeddingRepository;
   final MemoryNoteRepository? memoryNoteRepository;
   final BackgroundTaskManager taskManager;
+  final IndexingStateRepository? indexingStateRepository; // новый
   final String embeddingModel;
   final int embeddingVersion;
+  IndexingQueue? _queue;
+  String? _currentTaskId;
+
+  static const int maxFileSizeBytes = 5 * 1024 * 1024; // исправлено с 500 КБ
+  static const int chunkThreshold = 8000; // исправлено с 5000
 
   IndexingService({
     required this.receiptRepository,
     required this.embeddingService,
     required this.vectorSearchService,
+    required this.embeddingRepository,
+    this.indexingStateRepository,
     this.memoryNoteRepository,
     required this.taskManager,
     this.embeddingModel = 'openai/text-embedding-3-small',
@@ -91,36 +110,8 @@ class IndexingService {
   });
 
   /// Генерирует стабильный ID документа на основе пути.
-  ///
-  /// Используется хеш пути, чтобы ID оставался стабильным при перемещении
-  /// или переименовании файла.
   String _getDocumentId(String path) {
     return 'obs_${path.hashCode.abs().toRadixString(16)}';
-  }
-
-  /// Генерирует уникальный ID для миграции.
-  String _generateMigrationId() {
-    return 'sourceId_migration_${DateTime.now().toIso8601String().replaceAll(':', '_')}';
-  }
-
-  /// Создаёт резервную копию базы данных.
-  Future<String> _createBackup() async {
-    final dbPath = await getDatabasesPath();
-    final dbFile = File('$dbPath/finance.db');
-    final timestamp = DateTime.now().toIso8601String().replaceAll(':', '_');
-    final backupPath = '$dbPath/finance_backup_$timestamp.db';
-
-    if (await dbFile.exists()) {
-      await dbFile.copy(backupPath);
-      DebugLogger().logMemory(
-        'Создана резервная копия БД: $backupPath',
-        level: LogLevel.info,
-      );
-    } else {
-      throw Exception('Файл БД не найден: $dbFile.path');
-    }
-
-    return backupPath;
   }
 
   Future<void> indexSource({
@@ -169,7 +160,20 @@ class IndexingService {
       metadata: metadata,
     );
 
+    // Сохраняем в старую таблицу (всегда)
     await vectorSearchService.save(embedding);
+
+    // Если включён новый движок, сохраняем также в новую таблицу
+    if (AppSettings.useSqliteVec) {
+      try {
+        await embeddingRepository.saveVec(embedding);
+      } catch (e) {
+        DebugLogger().logMemory(
+          'Ошибка сохранения в новую таблицу: $e',
+          level: LogLevel.error,
+        );
+      }
+    }
   }
 
   Future<void> indexAll({
@@ -252,6 +256,278 @@ class IndexingService {
     }
   }
 
+  /// Основной метод индексации Obsidian с использованием очереди.
+  // Полностью переписать метод indexObsidian:
+  Future<ObsidianIndexResult> indexObsidian(
+    String vaultPath, {
+    Function(int processed, int total)? onProgress,
+  }) async {
+    // Диагностика OOM: замеряем начальное потребление памяти
+    final startMemory = ProcessInfo.currentRss;
+    DebugLogger().logMemory(
+      'Начало индексации Obsidian, начальная память: ${startMemory ~/ 1024} КБ',
+      level: LogLevel.info,
+    );
+
+    // Проверяем, есть ли сохранённое состояние
+    IndexingState? savedState;
+    List<String> remainingPaths = [];
+    int totalFiles = 0;
+
+    if (indexingStateRepository != null) {
+      try {
+        savedState = await indexingStateRepository!.load('obsidian');
+      } catch (e) {
+        DebugLogger().logMemory(
+          'Не удалось загрузить состояние индексации: $e',
+          level: LogLevel.warning,
+        );
+      }
+
+      if (savedState != null &&
+          savedState.status != 'completed' &&
+          savedState.status != 'failed') {
+        // Восстанавливаем состояние
+        remainingPaths = savedState.remainingPaths;
+        totalFiles = savedState.totalFiles;
+        DebugLogger().logMemory(
+          'Восстановлено состояние индексации: обработано ${savedState.processedFiles} из $totalFiles',
+          level: LogLevel.info,
+        );
+        // Если осталось 0 файлов, но статус не completed — возможно, ошибка, начинаем заново
+        if (remainingPaths.isEmpty) {
+          DebugLogger().logMemory(
+            'Состояние повреждено (нет оставшихся файлов), начинаем заново',
+            level: LogLevel.warning,
+          );
+          savedState = null;
+        }
+      }
+    }
+
+    if (savedState == null) {
+      // Сканируем Vault заново
+      final reader = ObsidianReaderService();
+      List<ObsidianNote> notes;
+      try {
+        final status = await Permission.manageExternalStorage.status;
+        if (!status.isGranted) {
+          final result = await Permission.manageExternalStorage.request();
+          if (!result.isGranted) {
+            throw Exception('Нет доступа к файлам устройства');
+          }
+        }
+        notes = await reader.readVault(vaultPath);
+      } catch (e) {
+        DebugLogger().logMemory(
+          'Ошибка чтения vault: $e',
+          level: LogLevel.error,
+        );
+        rethrow;
+      }
+
+      if (notes.isEmpty) {
+        throw Exception('В Vault не найдено markdown-файлов');
+      }
+
+      // Формируем список путей файлов
+      final allPaths = notes.map((n) => n.path).toList();
+      totalFiles = allPaths.length;
+      remainingPaths = List.from(allPaths);
+
+      // Создаём начальное состояние
+      if (indexingStateRepository != null) {
+        final initialState = IndexingState.initial(
+          sourceType: 'obsidian',
+          totalFiles: totalFiles,
+          remainingPaths: remainingPaths,
+        );
+        await indexingStateRepository!.save(initialState);
+      }
+    }
+
+    // Создаём задачу в BackgroundTaskManager
+    final taskId = 'obsidian_index_${DateTime.now().millisecondsSinceEpoch}';
+    _currentTaskId = taskId;
+    final bgTask = BackgroundTask(
+      id: taskId,
+      title: 'Индексация Obsidian',
+      status: BackgroundTaskStatus.processing,
+      type: 'memory_index_obsidian',
+      params: {'vaultPath': vaultPath},
+    );
+    taskManager.addTask(bgTask);
+
+    // Создаём очередь
+    // Создаём очередь
+    late final IndexingQueue queue;
+    queue = IndexingQueue(
+      maxConcurrent: 3,
+      taskHandler: (task) async {
+        final filePath = task.filePath;
+        final file = File(filePath);
+        if (!await file.exists()) {
+          DebugLogger().logMemory(
+            'Файл не существует: $filePath',
+            level: LogLevel.warning,
+          );
+          return;
+        }
+        final stat = await file.stat();
+        if (stat.size > maxFileSizeBytes) {
+          DebugLogger().logMemory(
+            'Пропущен (слишком большой): $filePath (${stat.size} байт)',
+            level: LogLevel.warning,
+          );
+          return;
+        }
+        final rawContent = await file.readAsString();
+        final modifiedAt = await file.lastModified();
+        final note = ObsidianNote.fromFile(
+          path: filePath,
+          rawContent: rawContent,
+          modifiedAt: modifiedAt,
+        );
+        await _indexObsidianNote(note);
+      },
+      onProgress: (processed, total) {
+        if (_currentTaskId != null) {
+          final progress = total > 0 ? processed / total : 0.0;
+          taskManager.updateTask(
+            _currentTaskId!,
+            progress: progress,
+            message: 'Индексация: $processed из $total',
+          );
+        }
+        _updateStateFromQueue(queue);
+        onProgress?.call(processed, total);
+      },
+      onStateChanged: (state) {},
+    );
+
+    final tasks = remainingPaths.map((path) {
+      return IndexingTask(id: 'file_${path.hashCode.abs()}', filePath: path);
+    }).toList();
+
+    queue.addTasks(tasks);
+    _queue = queue;
+    queue.start();
+
+    await _waitForQueueCompletion(queue);
+
+    final endMemory = ProcessInfo.currentRss;
+    DebugLogger().logMemory(
+      'Индексация завершена, пиковая память: ${endMemory ~/ 1024} КБ, '
+      'прирост: ${(endMemory - startMemory) ~/ 1024} КБ',
+      level: LogLevel.info,
+    );
+
+    if (indexingStateRepository != null) {
+      await indexingStateRepository!.delete('obsidian');
+    }
+
+    final result = ObsidianIndexResult(
+      totalFiles: totalFiles,
+      successCount: queue.state.completed.length,
+      skippedCount: 0,
+      errorCount: queue.state.failed.length,
+      errors: queue.state.failed.map((t) => t.filePath).toList(),
+    );
+
+    if (_currentTaskId != null) {
+      taskManager.updateTask(
+        _currentTaskId!,
+        status: BackgroundTaskStatus.completed,
+        progress: 1.0,
+        message: 'Индексация завершена',
+      );
+      Future.delayed(const Duration(seconds: 3), () {
+        if (_currentTaskId != null) {
+          taskManager.removeTask(_currentTaskId!);
+          _currentTaskId = null;
+        }
+      });
+    }
+
+    return result;
+  }
+
+  /// Ожидание завершения очереди.
+  Future<void> _waitForQueueCompletion(IndexingQueue queue) async {
+    final completer = Completer<void>();
+    Timer? timer;
+    timer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (!queue.isRunning &&
+          queue.state.pending.isEmpty &&
+          queue.state.active.isEmpty) {
+        timer?.cancel();
+        completer.complete();
+      }
+    });
+    return completer.future;
+  }
+
+  /// Обновление состояния индексации в БД на основе состояния очереди.
+  Future<void> _updateStateFromQueue(IndexingQueue queue) async {
+    if (indexingStateRepository == null) return;
+
+    final state = queue.state;
+    final remainingPaths = state.pending.map((t) => t.filePath).toList();
+    final updatedState = IndexingState(
+      id: 'obsidian_index',
+      sourceType: 'obsidian',
+      totalFiles: state.total,
+      processedFiles: state.processed,
+      skippedFiles: 0,
+      errorFiles: state.failed.length,
+      currentFilePath: state.active.isNotEmpty
+          ? state.active.first.filePath
+          : null,
+      status: queue.isRunning
+          ? 'indexing'
+          : (state.isPaused ? 'paused' : 'idle'),
+      startedAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      resumeToken: IndexingState.encodeRemainingPaths(remainingPaths),
+    );
+    await indexingStateRepository!.save(updatedState);
+  }
+
+  // Методы управления очередью (для UI)
+  Future<void> pauseIndexing() async {
+    _queue?.pause();
+    if (_currentTaskId != null) {
+      taskManager.updateTask(
+        _currentTaskId!,
+        status: BackgroundTaskStatus.paused,
+        message: 'Приостановлено',
+      );
+    }
+  }
+
+  Future<void> resumeIndexing() async {
+    _queue?.resume();
+    if (_currentTaskId != null) {
+      taskManager.updateTask(
+        _currentTaskId!,
+        status: BackgroundTaskStatus.processing,
+        message: 'Возобновлено',
+      );
+    }
+  }
+
+  Future<void> cancelIndexing() async {
+    _queue?.cancel();
+    if (_currentTaskId != null) {
+      taskManager.failTask(_currentTaskId!, message: 'Отменено пользователем');
+      taskManager.removeTask(_currentTaskId!);
+      _currentTaskId = null;
+    }
+    if (indexingStateRepository != null) {
+      await indexingStateRepository!.delete('obsidian');
+    }
+  }
+
   /// Удаляет эмбеддинги Obsidian-заметок из служебных папок.
   Future<int> cleanObsidianTrash() async {
     DebugLogger().logMemory('Начата очистка мусорных эмбеддингов Obsidian');
@@ -322,13 +598,25 @@ class IndexingService {
   }
 
   /// Индексация одного Obsidian-файла с проверкой изменений.
-  ///
-  /// [migrationId] — если передан, добавляется в metadata для отслеживания миграции.
   Future<_IndexResult> _indexObsidianNote(
     ObsidianNote note, {
     String? migrationId,
   }) async {
     final documentId = _getDocumentId(note.path);
+    final content = note.content;
+    const chunkThreshold = 5000;
+
+    // Защита от OOM: проверка размера содержимого
+    final contentSizeBytes =
+        content.length * 2; // приблизительно 2 байта на символ в UTF-16
+    if (contentSizeBytes > maxFileSizeBytes) {
+      DebugLogger().logMemory(
+        '⚠️ Файл пропущен (превышен лимит размера): ${note.path} '
+        '(размер: ${(contentSizeBytes / 1024).toStringAsFixed(1)} КБ)',
+        level: LogLevel.warning,
+      );
+      return _IndexResult.skipped;
+    }
 
     // Проверка существующего эмбеддинга
     final existing = await vectorSearchService.findBySource(
@@ -352,32 +640,8 @@ class IndexingService {
         );
         return _IndexResult.skipped;
       }
-
-      // Файл изменился — удаляем все старые чанки (но только после создания новых)
-      DebugLogger().logMemory(
-        'Обновление изменённого файла: ${note.path} (удаляем ${existingEmbeddings.length} старых чанков)',
-        level: LogLevel.debug,
-      );
-      // НЕ удаляем здесь! Удалим после создания новых чанков (см. исправление 1)
     }
 
-    // Инкрементальная проверка
-    if (existing != null) {
-      final existingDate = existing.sourceUpdatedAt;
-      if (existingDate.isAtSameMomentAs(note.modifiedAt) ||
-          existingDate.isAfter(note.modifiedAt)) {
-        DebugLogger().logMemory(
-          'Пропущен (без изменений): ${note.path}',
-          level: LogLevel.debug,
-        );
-        return _IndexResult.skipped;
-      }
-    }
-
-    const chunkThreshold = 5000;
-    final content = note.content;
-
-    // Базовые метаданные
     final baseMetadata = {'path': note.path, 'title': note.title};
 
     if (content.length > chunkThreshold) {
@@ -387,7 +651,7 @@ class IndexingService {
         level: LogLevel.debug,
       );
 
-      final chunker = ChunkingService(chunkSize: 2000, overlap: 200);
+      final chunker = ChunkingService();
       final chunks = await chunker.chunk(content);
 
       DebugLogger().logMemory(
@@ -407,7 +671,6 @@ class IndexingService {
       for (int i = 0; i < chunks.length; i++) {
         final chunk = chunks[i];
 
-        // Проверяем, не пустой ли чанк
         if (chunk.content.trim().isEmpty || chunk.content.trim().length < 3) {
           DebugLogger().logMemory(
             'Пропущен пустой чанк #$i для ${note.path}',
@@ -440,11 +703,9 @@ class IndexingService {
             'Ошибка индексации чанка #$i для ${note.path}: $e',
             level: LogLevel.error,
           );
-          // Продолжаем с остальными чанками
         }
       }
 
-      // Проверяем, был ли сохранён хотя бы один чанк
       if (indexedChunks == 0) {
         final errorMsg = 'Не удалось сохранить ни один чанк для ${note.path}';
         if (chunkErrors.isNotEmpty) {
@@ -454,8 +715,6 @@ class IndexingService {
         }
       }
 
-      // ТОЛЬКО ТЕПЕРЬ удаляем старый эмбеддинг, если он существует
-      // и если все чанки успешно сохранены (или хотя бы часть)
       if (existing != null) {
         await vectorSearchService.deleteBySource('obsidian_note', documentId);
         DebugLogger().logMemory(
@@ -497,222 +756,6 @@ class IndexingService {
     }
   }
 
-  /// Индексация всех заметок из Obsidian vault с поддержкой:
-  /// - безопасной миграции с backup
-  /// - прогресса в UI
-  /// - пакетной обработки
-  /// - инкрементальности
-  /// - отчёта об ошибках
-  Future<ObsidianIndexResult> indexObsidian(
-    String vaultPath, {
-    Function(int processed, int total)? onProgress,
-  }) async {
-    // 1. Очистка мусорных папок перед индексацией
-    await cleanObsidianTrash();
-
-    DebugLogger().logMemory('Начало индексации Obsidian vault: $vaultPath');
-
-    final reader = ObsidianReaderService();
-
-    List<ObsidianNote> notes;
-
-    try {
-      final status = await Permission.manageExternalStorage.status;
-
-      if (!status.isGranted) {
-        final result = await Permission.manageExternalStorage.request();
-
-        if (!result.isGranted) {
-          throw Exception('Нет доступа к файлам устройства');
-        }
-      }
-
-      notes = await reader.readVault(vaultPath);
-    } catch (e) {
-      DebugLogger().logMemory('Ошибка чтения vault: $e', level: LogLevel.error);
-      rethrow;
-    }
-
-    if (notes.isEmpty) {
-      throw Exception('В Vault не найдено markdown-файлов');
-    }
-
-    // 2. Подсчёт старых записей
-    final oldCount = await vectorSearchService.countBySourceType(
-      'obsidian_note',
-    );
-    DebugLogger().logMemory(
-      'Найдено старых Obsidian записей: $oldCount',
-      level: LogLevel.info,
-    );
-
-    // 3. Создание backup
-    final backupPath = await _createBackup();
-
-    // 4. Генерация migrationId
-    final migrationId = _generateMigrationId();
-    DebugLogger().logMemory(
-      'Начало миграции с ID: $migrationId',
-      level: LogLevel.info,
-    );
-
-    final totalFiles = notes.length;
-    int successCount = 0;
-    int skippedCount = 0;
-    int errorCount = 0;
-    final errors = <String>[];
-    int totalChunks = 0;
-
-    // 5. Пакетная обработка с передачей migrationId
-    const batchSize = 30;
-    const pauseBetweenBatches = Duration(milliseconds: 100);
-    const maxConcurrent = 5;
-
-    int processed = 0;
-
-    for (int i = 0; i < notes.length; i += batchSize) {
-      final batch = notes.skip(i).take(batchSize).toList();
-
-      final futures = <Future<void>>[];
-      final semaphore = _Semaphore(maxConcurrent);
-
-      int batchSuccess = 0;
-      int batchSkipped = 0;
-      int batchErrors = 0;
-      int batchChunks = 0;
-
-      for (final note in batch) {
-        futures.add(
-          semaphore.withPermit(() async {
-            try {
-              final result = await _indexObsidianNote(
-                note,
-                migrationId: migrationId,
-              );
-              if (result == _IndexResult.skipped) {
-                batchSkipped++;
-              } else if (result == _IndexResult.success) {
-                batchSuccess++;
-                // Подсчитываем чанки (загружаем метаданные из последнего сохранённого эмбеддинга)
-                // Упрощённо: считаем, что каждый успешный файл даёт как минимум 1 чанк
-                batchChunks += 1;
-              }
-            } catch (e) {
-              batchErrors++;
-              final errorMsg = '${note.path}: $e';
-              errors.add(errorMsg);
-              DebugLogger().logMemory(
-                'Ошибка индексации Obsidian ${note.path}: $e',
-                level: LogLevel.error,
-              );
-            }
-          }),
-        );
-      }
-
-      await Future.wait(futures);
-
-      successCount += batchSuccess;
-      skippedCount += batchSkipped;
-      errorCount += batchErrors;
-      totalChunks += batchChunks;
-      processed += batch.length;
-
-      onProgress?.call(processed, totalFiles);
-
-      DebugLogger().logMemory(
-        'Obsidian пачка обработана: $processed из $totalFiles '
-        '(успешно: $batchSuccess, пропущено: $batchSkipped, ошибок: $batchErrors)',
-        level: LogLevel.debug,
-      );
-
-      if (i + batchSize < notes.length) {
-        await Future.delayed(pauseBetweenBatches);
-      }
-    }
-
-    // 6. Подсчёт новых записей
-    final newCount = await vectorSearchService.countByMigrationId(migrationId);
-    final successRate = oldCount > 0 ? newCount / oldCount : 1.0;
-
-    DebugLogger().logMemory(
-      'Миграция: старых=$oldCount, новых=$newCount, успешность=${(successRate * 100).toStringAsFixed(1)}%',
-      level: LogLevel.info,
-    );
-
-    int oldRecordsDeleted = 0;
-    int newRecordsCreated = 0;
-
-    // 7. Валидация и финализация
-    if (successRate >= 0.9 && newCount > 0) {
-      // Успешная миграция
-      DebugLogger().logMemory(
-        'Миграция успешна, удаляем старый индекс...',
-        level: LogLevel.info,
-      );
-
-      oldRecordsDeleted = oldCount;
-      await vectorSearchService.deleteBySourceType('obsidian_note');
-
-      DebugLogger().logMemory(
-        'Очищаем migrationId у новых записей...',
-        level: LogLevel.debug,
-      );
-
-      await vectorSearchService.clearMigrationId(migrationId);
-
-      newRecordsCreated = newCount;
-
-      DebugLogger().logMemory(
-        'Миграция завершена успешно',
-        level: LogLevel.info,
-        extra: {
-          'oldRecordsDeleted': oldRecordsDeleted,
-          'newRecordsCreated': newRecordsCreated,
-          'totalChunks': totalChunks,
-        },
-      );
-    } else {
-      // Откат
-      DebugLogger().logMemory(
-        'Миграция не удалась (успешность ${(successRate * 100).toStringAsFixed(1)}% < 90%), откат...',
-        level: LogLevel.error,
-      );
-
-      await vectorSearchService.deleteByMigrationId(migrationId);
-
-      DebugLogger().logMemory(
-        'Откат выполнен, старый индекс восстановлен из backup: $backupPath',
-        level: LogLevel.info,
-      );
-
-      throw Exception(
-        'Миграция не удалась: успешность ${(successRate * 100).toStringAsFixed(1)}% < 90%. '
-        'Восстановлен backup: $backupPath',
-      );
-    }
-
-    // 8. Формируем результат
-    final result = ObsidianIndexResult(
-      totalFiles: totalFiles,
-      successCount: successCount,
-      skippedCount: skippedCount,
-      errorCount: errorCount,
-      errors: errors,
-      oldRecordsDeleted: oldRecordsDeleted,
-      newRecordsCreated: newRecordsCreated,
-      totalChunks: totalChunks,
-      migrationSuccessRate: successRate,
-    );
-
-    DebugLogger().logMemory(
-      'Индексация Obsidian завершена\n$result',
-      level: LogLevel.info,
-    );
-
-    return result;
-  }
-
   void scheduleIndexing({List<String>? sourceTypes, bool fullReindex = false}) {
     final task = BackgroundTask(
       id: 'memory_index_${DateTime.now().millisecondsSinceEpoch}',
@@ -739,46 +782,7 @@ class IndexingService {
   }
 }
 
-/// Результат индексации одного файла
 enum _IndexResult { success, skipped }
-
-/// Семафор для ограничения параллельных операций
-class _Semaphore {
-  final int maxConcurrent;
-  int _current = 0;
-  final List<Completer<void>> _waiting = [];
-
-  _Semaphore(this.maxConcurrent);
-
-  Future<void> withPermit(Future<void> Function() action) async {
-    await _acquire();
-    try {
-      await action();
-    } finally {
-      _release();
-    }
-  }
-
-  Future<void> _acquire() async {
-    if (_current < maxConcurrent) {
-      _current++;
-      return;
-    }
-    final completer = Completer<void>();
-    _waiting.add(completer);
-    await completer.future;
-    _current++;
-  }
-
-  void _release() {
-    if (_waiting.isNotEmpty) {
-      final completer = _waiting.removeAt(0);
-      completer.complete();
-    } else {
-      _current--;
-    }
-  }
-}
 
 class _SourceItem {
   final String sourceType;

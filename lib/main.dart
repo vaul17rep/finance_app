@@ -1,3 +1,4 @@
+import 'dart:async'; // для unawaited
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -16,7 +17,6 @@ import 'features/memory/services/indexing_service.dart';
 import 'features/memory/services/sqlite_vector_search_service.dart';
 import 'features/ai/ai_profiles.dart';
 import 'core/preferences/app_settings.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'features/memory/services/chunking_service.dart';
 import 'features/memory/services/semantic_search_service.dart';
 import 'features/memory/services/vector_similarity_service.dart';
@@ -47,7 +47,7 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // Сначала проверяем существование таблицы
+  // Проверяем и очищаем битые векторы
   await _checkAndCleanEmbeddings();
 
   await DatabaseHelper.instance.debugOperationsTable();
@@ -61,21 +61,27 @@ void main() async {
   // 2. Сервисы
   final openRouterService = OpenRouterService(profile: AiProfiles.paid);
   final embeddingService = EmbeddingService(openRouterService);
-  final vectorSearchService = SqliteVectorSearchService(embeddingRepository);
+
+  // Используем только старый движок (Инициатива A)
+  final legacyVectorSearchService = SqliteVectorSearchService(
+    embeddingRepository,
+  );
+
   final chunkingService = ChunkingService();
   final vectorSimilarityService = const VectorSimilarityService();
 
   final semanticSearchService = SemanticSearchService(
     embeddingService: embeddingService,
-    vectorSearchService: vectorSearchService,
+    legacyService: legacyVectorSearchService,
     embeddingRepository: embeddingRepository,
     database: await MemoryDatabase.instance.database,
   );
 
-  // 3. IndexingService
+  // 3. IndexingService (использует старый движок)
   final indexingService = IndexingService(
     embeddingService: embeddingService,
-    vectorSearchService: vectorSearchService,
+    vectorSearchService: legacyVectorSearchService,
+    embeddingRepository: embeddingRepository,
     receiptRepository: receiptRepository,
     memoryNoteRepository: memoryNoteRepository,
     taskManager: BackgroundTaskManager.instance,
@@ -86,7 +92,7 @@ void main() async {
   // 4. Инициализируем BackgroundTaskManager
   BackgroundTaskManager.instance.init(
     indexingService: indexingService,
-    vectorSearchService: vectorSearchService,
+    vectorSearchService: legacyVectorSearchService,
   );
 
   // --- Запуск приложения ---
@@ -94,13 +100,12 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
-
         ChangeNotifierProvider(
           create: (_) => ColorSettingsNotifier()..loadSettings(),
         ),
       ],
       child: FinanceApp(
-        vectorSearchService: vectorSearchService,
+        vectorSearchService: legacyVectorSearchService,
         embeddingService: embeddingService,
         indexingService: indexingService,
         chunkingService: chunkingService,
@@ -111,12 +116,9 @@ void main() async {
   );
 }
 
-/// Проверяет существование таблицы embeddings и очищает битые записи
-/// Проверяет существование таблицы embeddings и очищает битые записи
-/// Использует MemoryDatabase, а не основную БД
+/// Проверяет существование таблицы embeddings и очищает битые записи.
 Future<void> _checkAndCleanEmbeddings() async {
   try {
-    // ✅ ИСПРАВЛЕНО: используем MemoryDatabase, а не DatabaseHelper
     final db = await MemoryDatabase.instance.database;
 
     // Проверяем существование таблицы

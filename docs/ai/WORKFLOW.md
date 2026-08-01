@@ -1,0 +1,70 @@
+Схема процесса:
+
+
+
+IDEA
+
+
+
+↓
+
+
+
+CONTEXT ANALYSIS
+
+
+
+↓
+
+
+
+ARCHITECT BRIEF
+
+
+
+↓
+
+
+
+ARCHITECTURE REVIEW
+
+
+
+↓
+
+
+
+IMPLEMENTATION SPECIFICATION
+
+
+
+↓
+
+
+
+DEVELOPMENT
+
+
+
+↓
+
+
+
+CODE REVIEW
+
+
+
+↓
+
+
+
+DOCUMENTATION UPDATE
+
+
+
+↓
+
+
+
+DONE
+

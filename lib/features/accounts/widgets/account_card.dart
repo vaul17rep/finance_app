@@ -4,6 +4,7 @@ import '../../../models/account.dart';
 import '../../../core/preferences/color_settings_notifier.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../models/card_color_settings.dart';
+import '../../transfers/screens/transfer_screen.dart';
 
 class AccountCard extends StatelessWidget {
   static const double aspectRatio = 85.6 / 53.98;
@@ -39,7 +40,6 @@ class AccountCard extends StatelessWidget {
     final height = width / AccountCard.aspectRatio;
     final isDark = theme.brightness == Brightness.dark;
 
-    // Безопасное получение настроек
     CardColorSettings settings;
     try {
       settings = Provider.of<ColorSettingsNotifier>(
@@ -75,7 +75,7 @@ class AccountCard extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(expanded ? 23 : 19),
+            padding: EdgeInsets.all(expanded ? 23 : 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -92,8 +92,32 @@ class AccountCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // Звёздочка для основного счёта
                     if (account.isMain)
-                      const Icon(Icons.star, color: Colors.amber),
+                      const Icon(Icons.star, color: Colors.amber, size: 18),
+                    // Кнопка перевода - компактная
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TransferScreen(
+                              initialSourceAccountId: account.id,
+                            ),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.swap_horiz,
+                          size: 18,
+                          color: (isDark ? colorScheme.onPrimary : Colors.white)
+                              .withOpacity(0.7),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 // Тип счета

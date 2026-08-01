@@ -10,6 +10,7 @@ import 'dart:async';
 import 'widgets/operation_tile.dart';
 import '../../models/operation_type.dart';
 import '../../core/theme/app_dimensions.dart';
+import '../transfers/screens/transfer_screen.dart';
 
 class PendingDelete {
   final Operation operation;
@@ -380,6 +381,23 @@ class _OperationsScreenState extends State<OperationsScreen> {
                 }
               },
               child: const Icon(Icons.add, size: 30),
+            ),
+            const SizedBox(width: 16),
+            // Новая FAB "Перевод"
+            FloatingActionButton(
+              heroTag: 'transfer',
+              shape: const CircleBorder(),
+              backgroundColor: colorScheme.secondaryContainer,
+              foregroundColor: colorScheme.onSecondaryContainer,
+              elevation: 6,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => TransferScreen()),
+                );
+              },
+              child: const Icon(Icons.swap_horiz, size: 30),
+              tooltip: 'Перевод',
             ),
             const SizedBox(width: 16),
             FloatingActionButton.small(

@@ -1,3 +1,13 @@
+/// Хелпер для работы с SQLite базой данных.
+///
+/// Отвечает за создание, миграцию и CRUD операции.
+///
+/// Версия БД: 2 (добавлены переводы).
+///
+/// Связанные документы:
+/// - 05_Database_Specification — структура таблиц
+/// - 02_Architecture — Data Layer
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -41,15 +51,12 @@ class DatabaseHelper {
     if (Platform.isWindows) {
       return await databaseFactoryFfi.openDatabase(
         path,
-
         options: OpenDatabaseOptions(
-          version: 1,
-
+          version: 2,
           onCreate: _createDB,
-
+          onUpgrade: _upgradeDB,
           onOpen: (db) async {
             print("DATABASE OPENED");
-
             await db.execute('PRAGMA foreign_keys = ON');
           },
         ),
@@ -57,14 +64,11 @@ class DatabaseHelper {
     } else {
       return await openDatabase(
         path,
-
-        version: 1,
-
+        version: 2,
         onCreate: _createDB,
-
+        onUpgrade: _upgradeDB,
         onOpen: (db) async {
           print("DATABASE OPENED");
-
           await db.execute('PRAGMA foreign_keys = ON');
         },
       );
@@ -103,7 +107,7 @@ CREATE TABLE accounts (
   initialBalance REAL NOT NULL DEFAULT 0,
   isMain INTEGER NOT NULL DEFAULT 0,
   type TEXT NOT NULL DEFAULT 'other',
-position INTEGER DEFAULT 0
+  position INTEGER DEFAULT 0
 )
 ''');
 
@@ -111,133 +115,197 @@ position INTEGER DEFAULT 0
 CREATE TABLE operations (
   id TEXT PRIMARY KEY,
   accountId TEXT,
-
   type TEXT NOT NULL,
   amount REAL NOT NULL,
-
   comment TEXT,
   date TEXT NOT NULL,
-
   shop TEXT,
   article TEXT,
   categoryId TEXT,
   paymentType TEXT,
-
   receiptId TEXT,
   regularity TEXT,
   workDay INTEGER,
-
   plannedAmount REAL,
-  processed INTEGER DEFAULT 0
+  processed INTEGER DEFAULT 0,
+  transferId TEXT
 )
 ''');
 
     await db.execute('''
-  CREATE TABLE card_color_settings (
-    id TEXT PRIMARY KEY,
-    cardLightStart INTEGER,
-    cardLightEnd INTEGER,
-    cashLightStart INTEGER,
-    cashLightEnd INTEGER,
-    creditLightStart INTEGER,
-    creditLightEnd INTEGER,
-    otherLightStart INTEGER,
-    otherLightEnd INTEGER,
-    cardDarkStart INTEGER,
-    cardDarkEnd INTEGER,
-    cashDarkStart INTEGER,
-    cashDarkEnd INTEGER,
-    creditDarkStart INTEGER,
-    creditDarkEnd INTEGER,
-    otherDarkStart INTEGER,
-    otherDarkEnd INTEGER,
-    custom1Name TEXT DEFAULT '',
-    custom1LightStart INTEGER DEFAULT 0xFFB3C6E7,
-    custom1LightEnd INTEGER DEFAULT 0xFF8BA7D4,
-    custom1DarkStart INTEGER DEFAULT 0xFF2D3A5A,
-    custom1DarkEnd INTEGER DEFAULT 0xFF1E2A44,
-    custom2Name TEXT DEFAULT '',
-    custom2LightStart INTEGER DEFAULT 0xFFB3C6E7,
-    custom2LightEnd INTEGER DEFAULT 0xFF8BA7D4,
-    custom2DarkStart INTEGER DEFAULT 0xFF2D3A5A,
-    custom2DarkEnd INTEGER DEFAULT 0xFF1E2A44,
-    custom3Name TEXT DEFAULT '',
-    custom3LightStart INTEGER DEFAULT 0xFFB3C6E7,
-    custom3LightEnd INTEGER DEFAULT 0xFF8BA7D4,
-    custom3DarkStart INTEGER DEFAULT 0xFF2D3A5A,
-    custom3DarkEnd INTEGER DEFAULT 0xFF1E2A44,
-    custom4Name TEXT DEFAULT '',
-    custom4LightStart INTEGER DEFAULT 0xFFB3C6E7,
-    custom4LightEnd INTEGER DEFAULT 0xFF8BA7D4,
-    custom4DarkStart INTEGER DEFAULT 0xFF2D3A5A,
-    custom4DarkEnd INTEGER DEFAULT 0xFF1E2A44,
-    custom5Name TEXT DEFAULT '',
-    custom5LightStart INTEGER DEFAULT 0xFFB3C6E7,
-    custom5LightEnd INTEGER DEFAULT 0xFF8BA7D4,
-    custom5DarkStart INTEGER DEFAULT 0xFF2D3A5A,
-    custom5DarkEnd INTEGER DEFAULT 0xFF1E2A44
-  )
+CREATE TABLE card_color_settings (
+  id TEXT PRIMARY KEY,
+  cardLightStart INTEGER,
+  cardLightEnd INTEGER,
+  cashLightStart INTEGER,
+  cashLightEnd INTEGER,
+  creditLightStart INTEGER,
+  creditLightEnd INTEGER,
+  otherLightStart INTEGER,
+  otherLightEnd INTEGER,
+  cardDarkStart INTEGER,
+  cardDarkEnd INTEGER,
+  cashDarkStart INTEGER,
+  cashDarkEnd INTEGER,
+  creditDarkStart INTEGER,
+  creditDarkEnd INTEGER,
+  otherDarkStart INTEGER,
+  otherDarkEnd INTEGER,
+  custom1Name TEXT DEFAULT '',
+  custom1LightStart INTEGER DEFAULT 0xFFB3C6E7,
+  custom1LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+  custom1DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+  custom1DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+  custom2Name TEXT DEFAULT '',
+  custom2LightStart INTEGER DEFAULT 0xFFB3C6E7,
+  custom2LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+  custom2DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+  custom2DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+  custom3Name TEXT DEFAULT '',
+  custom3LightStart INTEGER DEFAULT 0xFFB3C6E7,
+  custom3LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+  custom3DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+  custom3DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+  custom4Name TEXT DEFAULT '',
+  custom4LightStart INTEGER DEFAULT 0xFFB3C6E7,
+  custom4LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+  custom4DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+  custom4DarkEnd INTEGER DEFAULT 0xFF1E2A44,
+  custom5Name TEXT DEFAULT '',
+  custom5LightStart INTEGER DEFAULT 0xFFB3C6E7,
+  custom5LightEnd INTEGER DEFAULT 0xFF8BA7D4,
+  custom5DarkStart INTEGER DEFAULT 0xFF2D3A5A,
+  custom5DarkEnd INTEGER DEFAULT 0xFF1E2A44
+)
 ''');
 
     await db.execute('''
-
-      CREATE TABLE receipts (
-
-        id TEXT PRIMARY KEY,
-
-        date TEXT NOT NULL,
-
-        time TEXT,
-
-        shop TEXT NOT NULL,
-
-        address TEXT,
-
-        paymentType TEXT,
-
-        amount REAL NOT NULL,
-
-        photoPath TEXT,
-
-        status TEXT NOT NULL,
-
-        comment TEXT
-
-      )
-
-    ''');
+CREATE TABLE receipts (
+  id TEXT PRIMARY KEY,
+  date TEXT NOT NULL,
+  time TEXT,
+  shop TEXT NOT NULL,
+  address TEXT,
+  paymentType TEXT,
+  amount REAL NOT NULL,
+  photoPath TEXT,
+  status TEXT NOT NULL,
+  comment TEXT
+)
+''');
 
     await db.execute('''
+CREATE TABLE receipt_items (
+  id TEXT PRIMARY KEY,
+  receiptId TEXT NOT NULL,
+  name TEXT NOT NULL,
+  quantity REAL NOT NULL,
+  unit TEXT,
+  price REAL NOT NULL,
+  total REAL NOT NULL,
+  priceBeforeDiscount REAL,
+  comment TEXT,
+  category TEXT,
+  FOREIGN KEY(receiptId) REFERENCES receipts(id) ON DELETE CASCADE
+)
+''');
 
-      CREATE TABLE receipt_items (
+    await db.execute('''
+CREATE TABLE transfers (
+  id TEXT PRIMARY KEY,
+  createdAt TEXT NOT NULL,
+  status TEXT DEFAULT 'active'
+)
+''');
 
-        id TEXT PRIMARY KEY,
+    await db.execute('''
+CREATE INDEX idx_operations_transferId ON operations(transferId)
+''');
+  }
 
-        receiptId TEXT NOT NULL,
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    DebugLogger().logDatabase(
+      'Миграция БД с версии $oldVersion на $newVersion',
+      level: LogLevel.info,
+    );
 
-        name TEXT NOT NULL,
+    if (oldVersion < 2) {
+      try {
+        // 1. Проверяем и создаём таблицу transfers
+        final transfersExist = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='transfers'",
+        );
 
-        quantity REAL NOT NULL,
+        if (transfersExist.isEmpty) {
+          await db.execute('''
+            CREATE TABLE transfers (
+              id TEXT PRIMARY KEY,
+              createdAt TEXT NOT NULL,
+              status TEXT DEFAULT 'active'
+            )
+          ''');
+          DebugLogger().logDatabase(
+            'Таблица transfers создана',
+            level: LogLevel.info,
+          );
+        } else {
+          DebugLogger().logDatabase(
+            'Таблица transfers уже существует, пропускаем создание',
+            level: LogLevel.debug,
+          );
+        }
 
-        unit TEXT,
+        // 2. Проверяем и добавляем колонку transferId в operations
+        final columns = await db.rawQuery("PRAGMA table_info(operations)");
+        final hasTransferId = columns.any((col) => col['name'] == 'transferId');
 
-        price REAL NOT NULL,
+        if (!hasTransferId) {
+          await db.execute('ALTER TABLE operations ADD COLUMN transferId TEXT');
+          DebugLogger().logDatabase(
+            'Колонка transferId добавлена в operations',
+            level: LogLevel.info,
+          );
+        } else {
+          DebugLogger().logDatabase(
+            'Колонка transferId уже существует, пропускаем добавление',
+            level: LogLevel.debug,
+          );
+        }
 
-        total REAL NOT NULL,
+        // 3. Проверяем и создаём индекс
+        final indexExists = await db.rawQuery(
+          "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_operations_transferId'",
+        );
 
-        priceBeforeDiscount REAL,
+        if (indexExists.isEmpty) {
+          await db.execute(
+            'CREATE INDEX idx_operations_transferId ON operations(transferId)',
+          );
+          DebugLogger().logDatabase(
+            'Индекс idx_operations_transferId создан',
+            level: LogLevel.info,
+          );
+        } else {
+          DebugLogger().logDatabase(
+            'Индекс idx_operations_transferId уже существует, пропускаем создание',
+            level: LogLevel.debug,
+          );
+        }
 
-        comment TEXT,
-
-        category TEXT,
-
-        FOREIGN KEY(receiptId) 
-          REFERENCES receipts(id)
-          ON DELETE CASCADE
-
-      )
-
-    ''');
+        DebugLogger().logDatabase(
+          'Миграция на версию 2 успешно завершена',
+          level: LogLevel.info,
+        );
+      } catch (e, stack) {
+        DebugLogger().logDatabase(
+          'Ошибка миграции БД',
+          level: LogLevel.error,
+          error: e,
+          stackTrace: stack,
+        );
+        rethrow;
+      }
+    }
   }
 
   Future<void> debugOperations() async {
@@ -599,6 +667,154 @@ CREATE TABLE operations (
     } catch (e, stack) {
       DebugLogger().logDatabase(
         'Ошибка сохранения чека ${receipt.id}',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  // ============================================
+  // Transfer (переводы)
+  // ============================================
+
+  /// Получение всех записей о переводах.
+  Future<List<Map<String, dynamic>>> getTransfers() async {
+    try {
+      final db = await database;
+      return await db.query('transfers', orderBy: 'createdAt DESC');
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка получения списка переводов',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  /// Получение операций по списку transferId (один запрос).
+  Future<List<Map<String, dynamic>>> getOperationsByTransferIds(
+    List<String> transferIds,
+  ) async {
+    try {
+      if (transferIds.isEmpty) return [];
+
+      final db = await database;
+      final placeholders = transferIds.map((_) => '?').join(',');
+      return await db.rawQuery(
+        'SELECT * FROM operations WHERE transferId IN ($placeholders)',
+        transferIds,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка получения операций по transferIds',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  /// Вставка записи о переводе.
+  Future<void> insertTransfer(Map<String, dynamic> transfer) async {
+    try {
+      final db = await database;
+      await db.insert('transfers', transfer);
+      DebugLogger().logDatabase(
+        'Перевод сохранён: ${transfer['id']}',
+        level: LogLevel.debug,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка сохранения перевода ${transfer['id']}',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  /// Получение записи о переводе по ID.
+  Future<Map<String, dynamic>?> getTransfer(String id) async {
+    try {
+      final db = await database;
+      final result = await db.query(
+        'transfers',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      return result.isNotEmpty ? result.first : null;
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка получения перевода $id',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  /// Удаление записи о переводе.
+  Future<void> deleteTransfer(String id) async {
+    try {
+      final db = await database;
+      await db.delete('transfers', where: 'id = ?', whereArgs: [id]);
+      DebugLogger().logDatabase('Перевод удалён: $id', level: LogLevel.debug);
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка удаления перевода $id',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  /// Получение операций по transferId.
+  Future<List<Map<String, dynamic>>> getOperationsByTransferId(
+    String transferId,
+  ) async {
+    try {
+      final db = await database;
+      return await db.query(
+        'operations',
+        where: 'transferId = ?',
+        whereArgs: [transferId],
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка получения операций по transferId $transferId',
+        level: LogLevel.error,
+        error: e,
+        stackTrace: stack,
+      );
+      rethrow;
+    }
+  }
+
+  /// Атомарная вставка нескольких операций в одной транзакции.
+  Future<void> insertOperations(List<Map<String, dynamic>> operations) async {
+    try {
+      final db = await database;
+      await db.transaction((txn) async {
+        for (final op in operations) {
+          await txn.insert('operations', op);
+        }
+      });
+      DebugLogger().logDatabase(
+        'Вставлено ${operations.length} операций атомарно',
+        level: LogLevel.debug,
+      );
+    } catch (e, stack) {
+      DebugLogger().logDatabase(
+        'Ошибка атомарной вставки операций',
         level: LogLevel.error,
         error: e,
         stackTrace: stack,

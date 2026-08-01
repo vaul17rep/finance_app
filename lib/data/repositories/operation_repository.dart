@@ -3,7 +3,6 @@
 import '../database/database_helper.dart';
 import '../../models/operation.dart';
 
-
 class OperationRepository {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
@@ -54,5 +53,32 @@ class OperationRepository {
 
   Future<void> deleteByReceiptId(String receiptId) async {
     await _dbHelper.deleteOperationByReceiptId(receiptId);
+  }
+
+  // ============================================
+  // Методы для переводов
+  // ============================================
+
+  /// Атомарная вставка нескольких операций.
+  Future<void> insertOperations(List<Operation> operations) async {
+    await _dbHelper.insertOperations(
+      operations.map((op) => op.toMap()).toList(),
+    );
+  }
+
+  /// Получение операций по transferId.
+  Future<List<Operation>> getOperationsByTransferId(String transferId) async {
+    final data = await _dbHelper.getOperationsByTransferId(transferId);
+    return data.map((json) => Operation.fromMap(json)).toList();
+  }
+
+  /// Получение операций по списку transferId (один запрос).
+  Future<List<Operation>> getOperationsByTransferIds(
+    List<String> transferIds,
+  ) async {
+    if (transferIds.isEmpty) return [];
+
+    final data = await _dbHelper.getOperationsByTransferIds(transferIds);
+    return data.map((json) => Operation.fromMap(json)).toList();
   }
 }

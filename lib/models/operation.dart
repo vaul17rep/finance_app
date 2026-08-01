@@ -1,5 +1,13 @@
 import 'operation_type.dart';
 
+/// Модель финансовой операции.
+///
+/// Operation — источник истины для всех финансовых изменений.
+///
+/// Связанные документы:
+/// - 03_Domain_Model — Operation
+/// - 04_Financial_Rules — правила создания операций
+/// - 05_Database_Specification — таблица operations
 class Operation {
   final String id;
 
@@ -31,6 +39,11 @@ class Operation {
 
   final bool processed;
 
+  /// ID перевода, если операция является частью перевода между счетами.
+  ///
+  /// Для обычных операций (не переводов) значение null.
+  final String? transferId;
+
   Operation({
     required this.id,
     required this.type,
@@ -47,7 +60,11 @@ class Operation {
     this.workDay,
     this.plannedAmount,
     this.processed = false,
+    this.transferId,
   });
+
+  /// Проверяет, является ли операция частью перевода.
+  bool get isTransfer => transferId != null;
 
   Map<String, dynamic> toMap() {
     return {
@@ -66,6 +83,7 @@ class Operation {
       'workDay': workDay == null ? null : (workDay! ? 1 : 0),
       'plannedAmount': plannedAmount,
       'processed': processed ? 1 : 0,
+      'transferId': transferId,
     };
   }
 
@@ -88,6 +106,7 @@ class Operation {
           ? null
           : (map['plannedAmount'] as num).toDouble(),
       processed: (map['processed'] ?? 0) == 1,
+      transferId: map['transferId'] as String?,
     );
   }
 
@@ -107,6 +126,7 @@ class Operation {
     bool? workDay,
     double? plannedAmount,
     bool? processed,
+    String? transferId,
   }) {
     return Operation(
       id: id ?? this.id,
@@ -124,6 +144,7 @@ class Operation {
       workDay: workDay ?? this.workDay,
       plannedAmount: plannedAmount ?? this.plannedAmount,
       processed: processed ?? this.processed,
+      transferId: transferId ?? this.transferId,
     );
   }
 }

@@ -25,6 +25,16 @@ Implementation Specification Agent.
 
 ---
 
+# Role Activation
+
+Твоя роль определяется последним переданным workflow-артефактом.
+
+Если входной документ содержит:
+
+"Следующая роль: X"
+
+ты работаешь как X, даже если предыдущий документ был создан другой ролью.
+
 # Context Loading
 
 Перед началом работы прочитай:
@@ -639,3 +649,15 @@ docs/ai/prompts/developer.md
 перейти к Code Review.
 
 ========================================
+
+# ROLE TRANSFER
+
+Следующий агент НЕ является продолжением текущей роли.
+
+При получении этого результата:
+
+- переключись на роль Principal Architect;
+- используй prompt:
+docs/ai/prompts/principal_architect.md
+- не повторяй Architecture Analysis;
+- начни этап ARCHITECTURE REVIEW.

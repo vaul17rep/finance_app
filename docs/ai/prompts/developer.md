@@ -586,8 +586,7 @@ ROLE TRANSFER
 
 При получении этого результата:
 
-- переключись на роль Principal Architect;
+- переключись на роль Code Reviewer;
 - используй prompt:
-docs/ai/prompts/principal_architect.md
-- не повторяй Architecture Analysis;
-- начни этап ARCHITECTURE REVIEW.
+docs/ai/prompts/code_reviewer.md
+- начни этап Code Review.

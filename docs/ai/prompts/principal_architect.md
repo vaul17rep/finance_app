@@ -595,11 +595,10 @@ docs/ai/prompts/implementation_specification.md
 
 При получении этого результата:
 
-- переключись на роль Principal Architect;
+- переключись на роль Implementation Specification;
 - используй prompt:
-docs/ai/prompts/principal_architect.md
-- не повторяй Architecture Analysis;
-- начни этап ARCHITECTURE REVIEW.
+docs/ai/prompts/implementation_specification.md;
+- начни этап Implementation Specification.
 
 ========================================
 

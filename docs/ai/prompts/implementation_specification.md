@@ -656,8 +656,6 @@ docs/ai/prompts/developer.md
 
 При получении этого результата:
 
-- переключись на роль Principal Architect;
+- переключись на роль Senior Developer;
 - используй prompt:
-docs/ai/prompts/principal_architect.md
-- не повторяй Architecture Analysis;
-- начни этап ARCHITECTURE REVIEW.
+docs/ai/prompts/developer.md

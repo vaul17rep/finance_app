@@ -1,66 +1,162 @@
-На основе дерева:
+# CODE MAP
 
+Назначение:
 
+Карта исходного кода проекта.
 
-Financial Domain
+Используется AI-агентами для понимания структуры системы.
 
+---
 
+# Architecture Overview
+
+Проект разделён на слои:
+
+- Domain Layer
+- Data Layer
+- Feature Layer
+- UI Layer
+
+---
+
+# Domain Layer
 
 Location:
 
 lib/domain/
 
+Responsibility:
 
+Содержит бизнес-модель системы.
 
-Contains:
+Включает:
 
-\- financial entities
+- финансовые сущности;
+- правила;
+- расчёты;
+- ограничения.
 
-\- financial calculations
+Allowed:
 
-\- business rules
+- бизнес-логика;
+- domain entities;
+- value objects.
 
+Forbidden:
 
+- UI зависимости;
+- прямой доступ к базе данных;
+- внешние сервисы.
 
+---
 
-
-Data Layer
-
-
+# Data Layer
 
 Location:
 
 lib/data/
 
+Responsibility:
 
+Работа с хранением и получением данных.
 
-Contains:
+Включает:
 
-\- repositories
+- repositories;
+- database;
+- services.
 
-\- database
+Allowed:
 
-\- services
+- реализация хранения;
+- преобразование данных.
 
+Forbidden:
 
+- бизнес-решения;
+- пользовательские сценарии.
 
+---
 
-
-Features
-
-
+# Feature Layer
 
 Location:
 
 lib/features/
 
+Responsibility:
 
+Пользовательские сценарии.
 
-Contains:
+Включает:
 
-\- user scenarios
+- feature logic;
+- orchestration;
+- состояния.
 
-\- UI
+Allowed:
 
-\- feature logic
+- взаимодействие слоёв;
+- сценарии пользователя.
 
+Forbidden:
+
+- хранение истины;
+- дублирование domain logic.
+
+---
+
+# UI Layer
+
+Location:
+
+lib/
+
+Responsibility:
+
+Отображение и взаимодействие пользователя.
+
+UI должен:
+
+- показывать данные;
+- отправлять действия.
+
+UI не должен:
+
+- считать финансовые правила;
+- хранить бизнес-логику.
+
+---
+
+# Dependency Direction
+
+Правильное направление:
+
+UI
+
+↓
+
+Features
+
+↓
+
+Domain
+
+↑
+
+Data
+
+---
+
+# AI Rule
+
+Если структура кода неизвестна:
+
+AI обязан запросить доступ к фактическому коду.
+
+Запрещено придумывать:
+
+- классы;
+- файлы;
+- методы;
+- зависимости.

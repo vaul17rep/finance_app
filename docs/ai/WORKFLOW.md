@@ -280,9 +280,20 @@ DONE
 
 ## Reviewer → Knowledge Manager
 
-Передать:
+После успешного завершения Code Review передать полный пакет изменений:
 
-- подтверждённую реализацию.
+- ARCHITECT BRIEF
+- ARCHITECT REVIEW
+- IMPLEMENTATION SPECIFICATION
+- DEVELOPMENT PLAN
+- PLAN REVIEW
+- IMPLEMENTATION REPORT
+- CODE REVIEW
+
+Цель:
+
+Knowledge Manager синхронизирует документацию
+на основе полного набора утверждённых артефактов.
 
 ---
 

@@ -7,27 +7,27 @@ library;
 
 import 'dart:async';
 import 'dart:io';
-import 'package:finance_app/data/repositories/receipt_repository.dart';
-import 'package:finance_app/data/services/background_manager/background_task.dart';
-import 'package:finance_app/data/services/background_manager/background_task_manager.dart';
-import 'package:finance_app/features/memory/models/embedding_model.dart';
-import 'package:finance_app/features/memory/services/chunking_service.dart';
-import 'package:finance_app/features/memory/services/embedding_service.dart';
-import 'package:finance_app/features/memory/services/vector_search_service.dart';
-import 'package:finance_app/features/memory/repositories/memory_note_repository.dart';
+import '/data/repositories/receipt_repository.dart';
+import '/data/services/background_manager/background_task.dart';
+import '/data/services/background_manager/background_task_manager.dart';
+import '/features/memory/models/embedding_model.dart';
+import '/features/memory/services/chunking_service.dart';
+import '/features/memory/services/embedding_service.dart';
+import '/features/memory/services/vector_search_service.dart';
+import '/features/memory/repositories/memory_note_repository.dart';
 import 'package:uuid/uuid.dart';
-import 'package:finance_app/models/receipt.dart';
-import 'package:finance_app/models/receipt_item.dart';
-import 'package:finance_app/features/memory/services/obsidian_reader_service.dart';
-import 'package:finance_app/features/memory/models/obsidian_note.dart';
-import 'package:finance_app/core/debug/debug_logger.dart';
+import '/models/receipt.dart';
+import '/models/receipt_item.dart';
+import '/features/memory/services/obsidian_reader_service.dart';
+import '/features/memory/models/obsidian_note.dart';
+import '/core/debug/debug_logger.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:finance_app/features/memory/repositories/embedding_repository.dart';
-import 'package:finance_app/core/preferences/app_settings.dart';
+import '/features/memory/repositories/embedding_repository.dart';
+import '/core/preferences/app_settings.dart';
 // Новые импорты
-import 'package:finance_app/features/memory/models/indexing_state.dart';
-import 'package:finance_app/features/memory/repositories/indexing_state_repository.dart';
-import 'package:finance_app/features/memory/services/indexing_queue.dart';
+import '/features/memory/models/indexing_state.dart';
+import '/features/memory/repositories/indexing_state_repository.dart';
+import '/features/memory/services/indexing_queue.dart';
 
 /// Результат индексации Obsidian
 class ObsidianIndexResult {

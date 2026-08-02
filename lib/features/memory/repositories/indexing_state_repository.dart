@@ -3,8 +3,8 @@
 /// Находится в модуле memory, использует MemoryDatabase.
 library;
 
-import 'package:finance_app/data/database/memory_database.dart';
-import 'package:finance_app/features/memory/models/indexing_state.dart';
+import '/data/database/memory_database.dart';
+import '/features/memory/models/indexing_state.dart';
 
 class IndexingStateRepository {
   final MemoryDatabase _db;

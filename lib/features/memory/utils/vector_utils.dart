@@ -1,5 +1,5 @@
 import 'dart:typed_data';
-import 'package:finance_app/core/debug/debug_logger.dart';
+import '/core/debug/debug_logger.dart';
 
 /// Преобразует список double в Uint8List (Float32Array → байты)
 ///

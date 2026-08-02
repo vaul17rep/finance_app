@@ -1,6 +1,5 @@
-import 'package:finance_app/features/memory/models/embedding_model.dart';
-import 'package:finance_app/features/memory/repositories/embedding_repository.dart';
-import 'package:finance_app/core/debug/debug_logger.dart';
+import '/features/memory/repositories/embedding_repository.dart';
+import '/core/debug/debug_logger.dart';
 
 /// Сервис для миграции данных из старой таблицы embeddings в новую embeddings_vec.
 class MemoryMigrationService {

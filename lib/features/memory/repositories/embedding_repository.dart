@@ -1,5 +1,5 @@
-import 'package:finance_app/data/database/memory_database.dart';
-import 'package:finance_app/features/memory/models/embedding_model.dart';
+import '/data/database/memory_database.dart';
+import '/features/memory/models/embedding_model.dart';
 
 class EmbeddingRepository {
   final MemoryDatabase db;

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:finance_app/features/memory/services/vector_search_service.dart';
-import 'package:finance_app/features/memory/services/embedding_service.dart';
-import 'package:finance_app/features/memory/models/embedding_model.dart';
-import 'package:finance_app/features/memory/services/indexing_service.dart';
-import 'package:finance_app/core/debug/debug_logger.dart';
-import 'package:finance_app/features/debug/screens/debug_log_screen.dart';
-import 'package:finance_app/features/memory/diagnostics/memory_diagnostic_service.dart';
-import 'package:finance_app/features/memory/diagnostics/widgets/diagnostic_button.dart';
-import 'package:finance_app/features/memory/services/chunking_service.dart';
-import 'package:finance_app/features/memory/services/semantic_search_service.dart';
-import 'package:finance_app/features/memory/services/vector_similarity_service.dart';
+import '/features/memory/services/vector_search_service.dart';
+import '/features/memory/services/embedding_service.dart';
+import '/features/memory/models/embedding_model.dart';
+import '/features/memory/services/indexing_service.dart';
+import '/core/debug/debug_logger.dart';
+import '/features/debug/screens/debug_log_screen.dart';
+import '/features/memory/diagnostics/memory_diagnostic_service.dart';
+import '/features/memory/diagnostics/widgets/diagnostic_button.dart';
+import '/features/memory/services/chunking_service.dart';
+import '/features/memory/services/semantic_search_service.dart';
+import '/features/memory/services/vector_similarity_service.dart';
 // ✅ ДОБАВЛЯЕМ импорт MemoryDatabase
-import 'package:finance_app/data/database/memory_database.dart';
+import '/data/database/memory_database.dart';
 
 class MemoryScreen extends StatefulWidget {
   final VectorSearchService vectorSearchService;

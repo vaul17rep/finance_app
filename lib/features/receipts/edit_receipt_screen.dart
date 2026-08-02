@@ -5,9 +5,9 @@ import '../../data/repositories/receipt_repository.dart';
 import '../../models/receipt_item.dart';
 import '../../core/theme/app_dimensions.dart';
 import 'edit_receipt_item_screen.dart';
-import 'package:finance_app/core/preferences/app_settings.dart';
-import 'package:finance_app/data/services/background_manager/background_task.dart';
-import 'package:finance_app/data/services/background_manager/background_task_manager.dart';
+import '/core/preferences/app_settings.dart';
+import '/data/services/background_manager/background_task.dart';
+import '/data/services/background_manager/background_task_manager.dart';
 
 class EditReceiptScreen extends StatefulWidget {
   final Receipt receipt;

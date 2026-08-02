@@ -1,10 +1,8 @@
 import 'dart:typed_data';
-import 'dart:math';
-import 'package:finance_app/features/memory/models/embedding_model.dart';
-import 'package:finance_app/features/memory/repositories/embedding_repository.dart';
-import 'package:finance_app/features/memory/utils/vector_utils.dart';
+import '/features/memory/models/embedding_model.dart';
+import '/features/memory/repositories/embedding_repository.dart';
 import 'vector_search_service.dart';
-import 'package:finance_app/core/debug/debug_logger.dart';
+import '/core/debug/debug_logger.dart';
 
 /// Реализация VectorSearchService с использованием sqlite-vec.
 /// Поиск выполняется на стороне БД через vec_distance_cosine.

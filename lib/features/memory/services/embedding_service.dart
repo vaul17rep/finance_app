@@ -5,9 +5,9 @@
 library;
 
 import 'dart:typed_data';
-import 'package:finance_app/data/services/openrouter_service.dart';
-import 'package:finance_app/features/memory/utils/vector_utils.dart';
-import 'package:finance_app/core/debug/debug_logger.dart';
+import '/data/services/openrouter_service.dart';
+import '/features/memory/utils/vector_utils.dart';
+import '/core/debug/debug_logger.dart';
 
 class EmbeddingService {
   final OpenRouterService openRouterService;

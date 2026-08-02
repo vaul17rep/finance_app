@@ -1,4 +1,5 @@
-import 'package:finance_app/models/receipt.dart';
+
+import 'receipt.dart';
 import 'receipt_item.dart';
 
 class ParsedReceipt {

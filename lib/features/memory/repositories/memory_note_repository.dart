@@ -1,5 +1,5 @@
-import 'package:finance_app/data/database/memory_database.dart';
-import 'package:finance_app/features/memory/models/memory_note.dart';
+import '/data/database/memory_database.dart';
+import '/features/memory/models/memory_note.dart';
 
 class MemoryNoteRepository {
   final MemoryDatabase _db;
